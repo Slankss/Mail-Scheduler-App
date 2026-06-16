@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Excel Import</h2>
+<p>Excel dosyasinda en az bir <strong>email</strong> sutunu (basliginda "mail" gecmeli) olmali. Isteğe bagli olarak isim sutunu da olabilir (basliginda "name", "isim" veya "ad" gecmeli).</p>
+
+<form method="post" enctype="multipart/form-data">
+    <div class="mb-3">
+        <input type="file" class="form-control" name="excel_file" accept=".xlsx,.xls" required>
+    </div>
+    <button type="submit" class="btn btn-primary">Yukle ve Import Et</button>
+</form>
+{% endblock %}

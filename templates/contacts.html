@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h2 class="mb-0">Sirketler</h2>
+        <span class="text-muted">Toplam <strong>{{ total_companies }}</strong> sirket &middot; <strong>{{ total_mails }}</strong> mail</span>
+    </div>
+    <div class="d-flex gap-2">
+        <button type="button" id="checkMailsBtn" class="btn btn-outline-primary btn-sm">
+            <span id="checkSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+            <span id="checkBtnText">Mailleri Kontrol Et</span>
+        </button>
+        <form method="post" action="{{ url_for('dedupe_contacts') }}" onsubmit="return confirm('Ayni maile sahip tekrar eden kayitlar silinecek (gonderilmis olan korunur). Devam edilsin mi?');">
+            <button type="submit" class="btn btn-outline-secondary btn-sm">Tekrar Edenleri Temizle</button>
+        </form>
+        <form method="post" action="{{ url_for('clear_contacts') }}" onsubmit="return confirm('Tum kisi listesi silinecek, emin misiniz?');">
+            <button type="submit" class="btn btn-outline-danger btn-sm">Listeyi Temizle</button>
+        </form>
+    </div>
+</div>
+
+<div class="btn-group mb-3" role="group">
+    <a href="{{ url_for('contacts_page') }}"
+       class="btn btn-sm {{ 'btn-primary' if not status else 'btn-outline-primary' }}">Tumu</a>
+    <a href="{{ url_for('contacts_page', status='pending') }}"
+       class="btn btn-sm {{ 'btn-warning' if status == 'pending' else 'btn-outline-warning' }}">Beklemede</a>
+    <a href="{{ url_for('contacts_page', status='sent') }}"
+       class="btn btn-sm {{ 'btn-success' if status == 'sent' else 'btn-outline-success' }}">Gonderildi</a>
+    <a href="{{ url_for('contacts_page', status='failed') }}"
+       class="btn btn-sm {{ 'btn-danger' if status == 'failed' else 'btn-outline-danger' }}">Basarisiz</a>
+</div>
+
+{% if not companies %}
+<p class="text-muted">Kayit bulunamadi.</p>
+{% endif %}
+
+<div class="accordion" id="companies">
+    {% for company in companies %}
+    <div class="accordion-item">
+        <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#company-{{ loop.index }}">
+                <span class="me-3 fw-bold">{{ company.name }}</span>
+                <span class="badge bg-secondary me-1">{{ company.total }} mail</span>
+                {% if company.sent %}<span class="badge bg-success me-1">{{ company.sent }} gonderildi</span>{% endif %}
+                {% if company.pending %}<span class="badge bg-warning text-dark me-1">{{ company.pending }} beklemede</span>{% endif %}
+                {% if company.failed %}<span class="badge bg-danger me-1">{{ company.failed }} basarisiz</span>{% endif %}
+            </button>
+        </h2>
+        <div id="company-{{ loop.index }}" class="accordion-collapse collapse" data-bs-parent="#companies">
+            <div class="accordion-body p-0">
+                <table class="table table-striped mb-0">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Email</th>
+                            <th>Durum</th>
+                            <th>Gonderim Zamani</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in company.contacts %}
+                        <tr>
+                            <td>{{ c.id }}</td>
+                            <td>{{ c.email }}</td>
+                            <td>
+                                {% if c.status == 'sent' %}
+                                    <span class="badge bg-success">Gonderildi</span>
+                                {% elif c.status == 'failed' %}
+                                    <span class="badge bg-danger">Basarisiz</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Beklemede</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ c.sent_at or '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Mail kontrol sonuc modal -->
+<div class="modal fade" id="checkResultModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Mail Kontrol Sonucu</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+      </div>
+      <div class="modal-body">
+        <div id="checkSummary"></div>
+        <div id="invalidListWrap" class="mt-3 d-none">
+          <p class="mb-1 fw-bold text-danger">Bulunamayan mail adresleri:</p>
+          <ul id="invalidList" class="small text-muted mb-0" style="max-height: 200px; overflow:auto;"></ul>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgec</button>
+        <button type="button" id="deleteInvalidBtn" class="btn btn-danger d-none">Olmayanlari Sil</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// base.html bootstrap bundle'i bu blocktan SONRA yukledigi icin
+// kodu DOMContentLoaded'a sariyoruz; aksi halde `bootstrap` tanimsiz olur.
+document.addEventListener("DOMContentLoaded", function () {
+    const btn = document.getElementById("checkMailsBtn");
+    const spinner = document.getElementById("checkSpinner");
+    const btnText = document.getElementById("checkBtnText");
+    const summary = document.getElementById("checkSummary");
+    const invalidListWrap = document.getElementById("invalidListWrap");
+    const invalidList = document.getElementById("invalidList");
+    const deleteBtn = document.getElementById("deleteInvalidBtn");
+    const modal = new bootstrap.Modal(document.getElementById("checkResultModal"));
+
+    let invalidIds = [];
+
+    function setLoading(loading) {
+        btn.disabled = loading;
+        spinner.classList.toggle("d-none", !loading);
+        btnText.textContent = loading ? "Kontrol ediliyor..." : "Mailleri Kontrol Et";
+    }
+
+    btn.addEventListener("click", async function () {
+        setLoading(true);
+        try {
+            const resp = await fetch("{{ url_for('verify_contacts') }}", { method: "POST" });
+            const data = await resp.json();
+
+            invalidIds = data.invalid_ids || [];
+
+            let html = "";
+            if (data.error) {
+                html += `<div class="alert alert-warning">${data.error}</div>`;
+            }
+            html += `<p class="mb-1"><strong>${data.total}</strong> mail adresi kontrol edildi.</p>`;
+            html += `<p class="mb-1 text-success"><strong>${data.valid}</strong> adet gercekte var.</p>`;
+            html += `<p class="mb-1 text-danger"><strong>${data.invalid}</strong> adet yok (bulunamadi).</p>`;
+            if (data.unknown) {
+                html += `<p class="mb-1 text-muted"><strong>${data.unknown}</strong> adet belirsiz (silinmeyecek).</p>`;
+            }
+            summary.innerHTML = html;
+
+            if (data.invalid > 0) {
+                invalidList.innerHTML = data.invalid_list
+                    .map(c => `<li>${c.email}</li>`).join("");
+                invalidListWrap.classList.remove("d-none");
+                deleteBtn.classList.remove("d-none");
+                deleteBtn.textContent = `Olmayan ${data.invalid} maili sil`;
+            } else {
+                invalidListWrap.classList.add("d-none");
+                deleteBtn.classList.add("d-none");
+            }
+
+            modal.show();
+        } catch (e) {
+            summary.innerHTML = `<div class="alert alert-danger">Kontrol sirasinda hata olustu: ${e}</div>`;
+            invalidListWrap.classList.add("d-none");
+            deleteBtn.classList.add("d-none");
+            modal.show();
+        } finally {
+            setLoading(false);
+        }
+    });
+
+    deleteBtn.addEventListener("click", async function () {
+        deleteBtn.disabled = true;
+        deleteBtn.textContent = "Siliniyor...";
+        try {
+            await fetch("{{ url_for('delete_invalid_contacts') }}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ids: invalidIds }),
+            });
+            window.location.reload();
+        } catch (e) {
+            deleteBtn.disabled = false;
+            deleteBtn.textContent = "Olmayanlari Sil";
+            alert("Silme sirasinda hata olustu: " + e);
+        }
+    });
+});
+</script>
+{% endblock %}

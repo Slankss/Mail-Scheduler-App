@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Durum</h2>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Toplam</h5>
+                <p class="fs-3">{{ stats.total }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Gonderildi</h5>
+                <p class="fs-3 text-success">{{ stats.sent }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Beklemede</h5>
+                <p class="fs-3 text-warning">{{ stats.pending }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title">Basarisiz</h5>
+                <p class="fs-3 text-danger">{{ stats.failed }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h5 class="card-title">Otomatik Gonderim</h5>
+        <p>
+            Durum:
+            {% if running %}
+                <span class="badge bg-success">Calisiyor</span>
+            {% else %}
+                <span class="badge bg-secondary">Durduruldu</span>
+            {% endif %}
+        </p>
+        <p>Her <strong>{{ settings.interval_minutes }}</strong> dakikada bir, en fazla <strong>{{ settings.batch_size }}</strong> kisiye mail gonderilecek.</p>
+
+        <div id="progress-wrap" class="mb-3">
+            <div class="progress" style="height: 24px;">
+                <div id="progress-bar"
+                     class="progress-bar progress-bar-striped {% if running %}progress-bar-animated{% endif %} bg-success"
+                     role="progressbar"
+                     style="width: {{ progress.percent }}%;">{{ progress.percent }}%</div>
+            </div>
+            <div class="d-flex justify-content-between small text-muted mt-1">
+                <span id="progress-counts">{{ progress.companies_sent }} firma ({{ progress.sent }} mail)
+                    / {{ progress.companies_total }} firma ({{ progress.total }} mail) gonderildi</span>
+                <span id="progress-pending">{{ progress.pending }} beklemede</span>
+            </div>
+            <div class="small mt-1">
+                <span id="progress-started">
+                    {% if progress.started_at %}Baslangic: {{ progress.started_at.replace('T', ' ') }}{% endif %}
+                </span>
+                <span id="progress-eta" class="ms-3">
+                    {% if progress.eta %}Tahmini bitis: {{ progress.eta.replace('T', ' ') }}{% else %}Tum mailler islendi{% endif %}
+                </span>
+            </div>
+        </div>
+
+        <form method="post" action="{{ url_for('start') }}" class="d-inline">
+            <button type="submit" class="btn btn-success" {% if running %}disabled{% endif %}>Baslat</button>
+        </form>
+        <form method="post" action="{{ url_for('stop') }}" class="d-inline">
+            <button type="submit" class="btn btn-danger" {% if not running %}disabled{% endif %}>Durdur</button>
+        </form>
+        <form method="post" action="{{ url_for('send_now') }}" class="d-inline">
+            <button type="submit" class="btn btn-primary">Simdi Gonder (1 paket)</button>
+        </form>
+    </div>
+</div>
+
+<script>
+function fmt(ts) { return ts ? ts.replace('T', ' ') : ''; }
+
+async function refreshProgress() {
+    try {
+        const r = await fetch("{{ url_for('progress') }}");
+        const p = await r.json();
+
+        const bar = document.getElementById('progress-bar');
+        bar.style.width = p.percent + '%';
+        bar.textContent = p.percent + '%';
+        bar.classList.toggle('progress-bar-animated', p.running);
+
+        document.getElementById('progress-counts').textContent =
+            p.companies_sent + ' firma (' + p.sent + ' mail) / ' + p.companies_total + ' firma (' + p.total + ' mail) gonderildi';
+        document.getElementById('progress-pending').textContent = p.pending + ' beklemede';
+        document.getElementById('progress-started').textContent =
+            p.started_at ? 'Baslangic: ' + fmt(p.started_at) : '';
+        document.getElementById('progress-eta').textContent =
+            p.eta ? 'Tahmini bitis: ' + fmt(p.eta) : 'Tum mailler islendi';
+    } catch (e) { /* yoksay */ }
+}
+setInterval(refreshProgress, 3000);
+</script>
+{% endblock %}

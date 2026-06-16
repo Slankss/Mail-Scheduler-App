@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Mail Ayarlari</h2>
+
+<form method="post" enctype="multipart/form-data">
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <label class="form-label">SMTP Sunucu</label>
+            <input type="text" class="form-control" name="smtp_server" value="{{ settings.smtp_server or '' }}" placeholder="smtp.gmail.com" required>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">SMTP Port</label>
+            <input type="number" class="form-control" name="smtp_port" value="{{ settings.smtp_port or 587 }}" required>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <label class="form-label">E-posta Adresi</label>
+            <input type="email" class="form-control" name="smtp_email" value="{{ settings.smtp_email or '' }}" required>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">Sifre / Uygulama Sifresi</label>
+            <input type="password" class="form-control" name="smtp_password" value="{{ settings.smtp_password or '' }}" required>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <label class="form-label">Gonderim araligi (dakika)</label>
+            <input type="number" min="1" class="form-control" name="interval_minutes" value="{{ settings.interval_minutes or 5 }}" required>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label">Her seferinde kac kisiye gonderilsin</label>
+            <input type="number" min="1" class="form-control" name="batch_size" value="{{ settings.batch_size or 1 }}" required>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <label class="form-label">Gunluk mail gonderme limiti</label>
+            <input type="number" min="0" class="form-control" name="daily_limit" value="{{ settings.daily_limit or 0 }}">
+            <div class="form-text">Bir gunde gonderilecek azami mail sayisi. Limit dolunca o gun scheduler calissa bile mail gonderilmez. <strong>0 = sinirsiz.</strong></div>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Mail Konusu</label>
+        <input type="text" class="form-control" name="subject" value="{{ settings.subject or '' }}" required>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Mail Icerigi</label>
+        <textarea class="form-control" name="body" rows="6" required>{{ settings.body or '' }}</textarea>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Ekler (Attachment)</label>
+        <input type="file" class="form-control" name="attachments" multiple>
+        <div class="form-text">Secilen dosyalar her gonderilen maile eklenir. Birden fazla secebilirsiniz.</div>
+    </div>
+
+    {% if attachments %}
+    <div class="mb-3">
+        <label class="form-label">Mevcut Ekler</label>
+        <ul class="list-group">
+            {% for a in attachments %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span>📎 {{ a.filename }}</span>
+                <button type="submit" class="btn btn-outline-danger btn-sm"
+                        formaction="{{ url_for('delete_attachment', attachment_id=a.id) }}"
+                        formnovalidate
+                        onclick="return confirm('Bu ek silinsin mi?');">Sil</button>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <button type="submit" class="btn btn-primary">Kaydet</button>
+</form>
+
+<div class="alert alert-info mt-4">
+    Gmail kullaniyorsaniz normal sifre yerine
+    <a href="https://myaccount.google.com/apppasswords" target="_blank">Uygulama Sifresi (App Password)</a>
+    olusturup onu girmeniz gerekir. SMTP sunucu: smtp.gmail.com, Port: 587
+</div>
+{% endblock %}
