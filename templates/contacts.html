@@ -1,11 +1,19 @@
 {% extends "base.html" %}
 {% block content %}
+<div class="mb-3">
+    <input type="text" id="companySearchInput" class="form-control form-control-lg w-100"
+           placeholder="Sirket adi veya mail adresine gore ara (en az 3 karakter)...">
+</div>
+
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
         <h2 class="mb-0">Sirketler</h2>
         <span class="text-muted">Toplam <strong>{{ total_companies }}</strong> sirket &middot; <strong>{{ total_mails }}</strong> mail</span>
     </div>
     <div class="d-flex gap-2">
+        <button type="button" id="deleteSelectedBtn" class="btn btn-danger btn-sm" disabled>
+            Secilenleri Sil (<span id="selectedCount">0</span>)
+        </button>
         <button type="button" id="checkMailsBtn" class="btn btn-outline-primary btn-sm">
             <span id="checkSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
             <span id="checkBtnText">Mailleri Kontrol Et</span>
@@ -36,16 +44,25 @@
 
 <div class="accordion" id="companies">
     {% for company in companies %}
-    <div class="accordion-item">
-        <h2 class="accordion-header">
+    <div class="accordion-item"
+         data-search="{{ (company.name ~ ' ' ~ (company.contacts|map(attribute='email')|join(' ')))|lower }}">
+        <h2 class="accordion-header d-flex align-items-stretch">
+            <div class="d-flex align-items-center ps-3 bg-body">
+                <input type="checkbox" class="form-check-input company-checkbox" value="{{ company.name }}"
+                       aria-label="{{ company.name }} sirketini sec">
+            </div>
             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                    data-bs-target="#company-{{ loop.index }}">
+                    data-bs-target="#company-{{ loop.index }}" style="width: auto; flex: 1 1 auto;">
                 <span class="me-3 fw-bold">{{ company.name }}</span>
                 <span class="badge bg-secondary me-1">{{ company.total }} mail</span>
                 {% if company.sent %}<span class="badge bg-success me-1">{{ company.sent }} gonderildi</span>{% endif %}
                 {% if company.pending %}<span class="badge bg-warning text-dark me-1">{{ company.pending }} beklemede</span>{% endif %}
                 {% if company.failed %}<span class="badge bg-danger me-1">{{ company.failed }} basarisiz</span>{% endif %}
             </button>
+            <div class="d-flex align-items-center pe-3 bg-body">
+                <button type="button" class="btn btn-sm btn-outline-danger delete-company-btn"
+                        data-company="{{ company.name }}">Sil</button>
+            </div>
         </h2>
         <div id="company-{{ loop.index }}" class="accordion-collapse collapse" data-bs-parent="#companies">
             <div class="accordion-body p-0">
@@ -110,6 +127,75 @@
 // base.html bootstrap bundle'i bu blocktan SONRA yukledigi icin
 // kodu DOMContentLoaded'a sariyoruz; aksi halde `bootstrap` tanimsiz olur.
 document.addEventListener("DOMContentLoaded", function () {
+    // --- Arama: en az 3 karakter yazilinca sirket adi/mail'e gore filtrele ---
+    const searchInput = document.getElementById("companySearchInput");
+    const accordionItems = document.querySelectorAll("#companies .accordion-item");
+
+    searchInput.addEventListener("input", function () {
+        const q = searchInput.value.trim().toLowerCase();
+        accordionItems.forEach(function (item) {
+            if (q.length < 3) {
+                item.classList.remove("d-none");
+                return;
+            }
+            const haystack = item.dataset.search || "";
+            item.classList.toggle("d-none", !haystack.includes(q));
+        });
+    });
+
+    // --- Checkbox ile coklu/tekli sirket silme ---
+    const deleteSelectedBtn = document.getElementById("deleteSelectedBtn");
+    const selectedCountSpan = document.getElementById("selectedCount");
+
+    function updateBulkButton() {
+        const count = document.querySelectorAll(".company-checkbox:checked").length;
+        selectedCountSpan.textContent = count;
+        deleteSelectedBtn.disabled = count === 0;
+    }
+
+    document.querySelectorAll(".company-checkbox").forEach(function (cb) {
+        cb.addEventListener("change", updateBulkButton);
+    });
+
+    async function deleteCompanies(names) {
+        const resp = await fetch("{{ url_for('delete_companies') }}", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ names: names }),
+        });
+        return resp.json();
+    }
+
+    deleteSelectedBtn.addEventListener("click", async function () {
+        const selected = Array.from(document.querySelectorAll(".company-checkbox:checked"))
+            .map(function (cb) { return cb.value; });
+        if (selected.length === 0) return;
+        if (!confirm(selected.length + " sirkete ait tum kayitlar silinecek. Onayliyor musunuz?")) return;
+        deleteSelectedBtn.disabled = true;
+        try {
+            await deleteCompanies(selected);
+            window.location.reload();
+        } catch (e) {
+            alert("Silme sirasinda hata olustu: " + e);
+            deleteSelectedBtn.disabled = false;
+        }
+    });
+
+    document.querySelectorAll(".delete-company-btn").forEach(function (delBtn) {
+        delBtn.addEventListener("click", async function () {
+            const name = delBtn.dataset.company;
+            if (!confirm('"' + name + '" sirketine ait tum kayitlar silinecek. Onayliyor musunuz?')) return;
+            delBtn.disabled = true;
+            try {
+                await deleteCompanies([name]);
+                window.location.reload();
+            } catch (e) {
+                alert("Silme sirasinda hata olustu: " + e);
+                delBtn.disabled = false;
+            }
+        });
+    });
+
     const btn = document.getElementById("checkMailsBtn");
     const spinner = document.getElementById("checkSpinner");
     const btnText = document.getElementById("checkBtnText");

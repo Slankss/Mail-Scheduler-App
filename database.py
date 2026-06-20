@@ -336,3 +336,24 @@ def delete_contacts_by_ids(ids):
     conn.commit()
     conn.close()
     return deleted
+
+
+def delete_contacts_by_company_names(names):
+    """Delete every contact belonging to the given company names.
+
+    get_companies() groups contacts under "(Isimsiz)" when the name is blank,
+    so that placeholder is mapped back to an empty string for matching here.
+    """
+    if not names:
+        return 0
+    conn = get_db_connection()
+    deleted = 0
+    for name in names:
+        real_name = "" if name == "(Isimsiz)" else name
+        cur = conn.execute(
+            "DELETE FROM contacts WHERE TRIM(COALESCE(name, '')) = ?", (real_name,)
+        )
+        deleted += cur.rowcount
+    conn.commit()
+    conn.close()
+    return deleted

@@ -290,6 +290,14 @@ def delete_invalid_contacts():
     return jsonify({"deleted": deleted})
 
 
+@app.route("/contacts/delete-companies", methods=["POST"])
+def delete_companies():
+    data = request.get_json(silent=True) or {}
+    names = data.get("names", [])
+    deleted = database.delete_contacts_by_company_names(names)
+    return jsonify({"deleted": deleted})
+
+
 @app.route("/contacts/dedupe", methods=["POST"])
 def dedupe_contacts():
     deleted = database.dedupe_contacts()

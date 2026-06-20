@@ -33,11 +33,11 @@ def send_email(settings, to_email, subject, body, attachments=None):
     port = int(settings["smtp_port"])
 
     if port == 465:
-        with smtplib.SMTP_SSL(server_addr, port) as server:
+        with smtplib.SMTP_SSL(server_addr, port, timeout=30) as server:
             server.login(settings["smtp_email"], settings["smtp_password"])
             server.send_message(msg)
     else:
-        with smtplib.SMTP(server_addr, port) as server:
+        with smtplib.SMTP(server_addr, port, timeout=30) as server:
             server.starttls()
             server.login(settings["smtp_email"], settings["smtp_password"])
             server.send_message(msg)
