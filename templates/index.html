@@ -2,36 +2,51 @@
 {% block content %}
 <h2>Durum</h2>
 
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <h5 class="card-title">Toplam</h5>
-                <p class="fs-3">{{ stats.total }}</p>
+{# Her kart ayni olcutu iki olcekte gosterir: kac mail, kac firma. #}
+{% macro stat_card(title, mails, companies, note='') %}
+<div class="col">
+    <div class="card text-center h-100">
+        <div class="card-body">
+            <h6 class="card-title text-muted">{{ title }}</h6>
+            <div class="d-flex justify-content-center align-items-stretch gap-2">
+                <div class="flex-fill">
+                    <div class="fs-4 lh-1">{{ mails }}</div>
+                    <div class="small text-muted">mail</div>
+                </div>
+                <div class="vr"></div>
+                <div class="flex-fill">
+                    <div class="fs-4 lh-1">{{ companies }}</div>
+                    <div class="small text-muted">firma</div>
+                </div>
             </div>
+            {% if note %}<div class="small text-muted mt-2">{{ note }}</div>{% endif %}
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <h5 class="card-title">Gonderildi</h5>
-                <p class="fs-3 text-success">{{ stats.sent }}</p>
+</div>
+{% endmacro %}
+
+<div class="row row-cols-1 row-cols-sm-2 row-cols-xl-5 g-3 mb-4">
+    {{ stat_card('Toplam', stats.total, company_stats.total,
+                 (stats.disabled ~ ' mail / ' ~ company_stats.disabled ~ ' firma pasif') if stats.disabled else '') }}
+    {{ stat_card('Gonderildi', stats.sent, company_stats.sent, 'firmada tum mailler gitti') }}
+    {{ stat_card('Geri donus', stats.replied, company_stats.replied,
+                 'gonderilen maillerin %' ~ charts.reply_rate ~ "'i") }}
+    {{ stat_card('Beklemede', stats.pending, company_stats.pending, 'firmada bekleyen mail var') }}
+    {{ stat_card('Basarisiz', stats.failed, company_stats.failed, 'firmada basarisiz mail var') }}
+</div>
+
+<div class="card mb-4 viz-root">
+    <div class="card-body">
+        <h5 class="card-title mb-1">Gonderim ve geri donus dagilimi</h5>
+        <p class="text-muted small">
+            Ayni kirilim iki olcekte: soldaki mail adedi, sagdaki firma sayisi.
+        </p>
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="viz-chart" data-chart="mails"></div>
             </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <h5 class="card-title">Beklemede</h5>
-                <p class="fs-3 text-warning">{{ stats.pending }}</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <h5 class="card-title">Basarisiz</h5>
-                <p class="fs-3 text-danger">{{ stats.failed }}</p>
+            <div class="col-md-6">
+                <div class="viz-chart" data-chart="companies"></div>
             </div>
         </div>
     </div>
@@ -60,7 +75,7 @@
             <div class="d-flex justify-content-between small text-muted mt-1">
                 <span id="progress-counts">{{ progress.companies_sent }} firma ({{ progress.sent }} mail)
                     / {{ progress.companies_total }} firma ({{ progress.total }} mail) gonderildi</span>
-                <span id="progress-pending">{{ progress.pending }} beklemede</span>
+                <span id="progress-pending">{{ progress.pending }} beklemede{% if progress.disabled %} &middot; {{ progress.disabled }} pasif haric{% endif %}</span>
             </div>
             <div class="small mt-1">
                 <span id="progress-started">
@@ -84,7 +99,225 @@
     </div>
 </div>
 
+<div class="card mb-4">
+    <div class="card-body">
+        <h5 class="card-title">Zamanlanmis Baslangic</h5>
+        <p class="text-muted small">
+            Gonderimin ileri bir tarihte kendiliginden baslamasini planlayin.
+            Zamani gelince otomatik gonderim baslatilir; ayarlardaki aralik ve
+            paket buyuklugu gecerlidir.
+        </p>
+
+        <form method="post" action="{{ url_for('create_schedule') }}" class="row g-2 align-items-end mb-3">
+            <div class="col-sm-5 col-md-4">
+                <label class="form-label" for="start_at">Baslangic zamani</label>
+                <input type="datetime-local" class="form-control" id="start_at" name="start_at"
+                       min="{{ now.strftime('%Y-%m-%dT%H:%M') }}" required>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-success">Zamanla</button>
+            </div>
+        </form>
+
+        {% if not schedules %}
+        <p class="text-muted mb-0">Kayitli zamanlama yok.</p>
+        {% else %}
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Baslangic</th>
+                        <th>Durum</th>
+                        <th>Olusturulma</th>
+                        <th class="text-end">Islem</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in schedules %}
+                    <tr>
+                        <td>{{ s.start_at.replace('T', ' ')[:16] }}</td>
+                        <td>
+                            {% if s.status == 'pending' %}
+                                <span class="badge bg-primary">Bekliyor</span>
+                            {% elif s.status == 'done' %}
+                                <span class="badge bg-success">Baslatildi</span>
+                            {% elif s.status == 'cancelled' %}
+                                <span class="badge bg-secondary">Iptal edildi</span>
+                            {% elif s.status == 'missed' %}
+                                <span class="badge bg-warning text-dark">Kacirildi</span>
+                            {% else %}
+                                <span class="badge bg-danger">Hata</span>
+                            {% endif %}
+                            {% if s.note %}<span class="small text-muted ms-1">{{ s.note }}</span>{% endif %}
+                        </td>
+                        <td class="small text-muted">{{ (s.created_at or '').replace('T', ' ')[:16] }}</td>
+                        <td class="text-end">
+                            {% if s.status == 'pending' %}
+                            <form method="post" action="{{ url_for('cancel_schedule', schedule_id=s.id) }}"
+                                  onsubmit="return confirm('Bu zamanlama iptal edilsin mi?');">
+                                <button type="submit" class="btn btn-outline-danger btn-sm">Iptal Et</button>
+                            </form>
+                            {% else %}
+                            <span class="text-muted small">&mdash;</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+/* Grafik renkleri dogrulanmis kategorik paletten gelir; metin her zaman
+   metin tokenlarini kullanir, seri rengini asla giymez. */
+.viz-root {
+    --viz-surface: #fcfcfb;
+    --viz-text: #0b0b0b;
+    --viz-text-muted: #52514e;
+}
+.viz-pie { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+.viz-slice { cursor: default; transition: opacity .12s ease-out; }
+.viz-chart.is-hovering .viz-slice { opacity: .35; }
+.viz-chart.is-hovering .viz-slice.is-active { opacity: 1; }
+.viz-legend { width: 100%; font-size: .875rem; color: var(--viz-text); }
+.viz-legend td { padding: .2rem .35rem; border: 0; }
+.viz-legend tr.is-active { background: rgba(0, 0, 0, .04); }
+.viz-legend .viz-swatch {
+    display: inline-block; width: .75rem; height: .75rem;
+    border-radius: .2rem; vertical-align: -1px; margin-right: .4rem;
+}
+.viz-legend .viz-value { text-align: right; font-variant-numeric: tabular-nums; }
+.viz-legend .viz-percent { text-align: right; color: var(--viz-text-muted); font-variant-numeric: tabular-nums; }
+.viz-tooltip {
+    position: fixed; z-index: 1080; pointer-events: none;
+    background: var(--viz-text); color: #fff; border-radius: .25rem;
+    padding: .25rem .5rem; font-size: .8125rem; white-space: nowrap;
+}
+</style>
+
 <script>
+// --- Pasta grafikleri (bagimsiz SVG, harici kutuphane yok) ---
+const VIZ_DATA = {{ charts|tojson }};
+
+function vizArc(cx, cy, outer, inner, start, end) {
+    // Tam daire tek yayla cizilemez; 360'i cok az kirparak halka kapatilir.
+    const sweep = Math.min(end - start, Math.PI * 2 - 1e-4);
+    const stop = start + sweep;
+    const large = sweep > Math.PI ? 1 : 0;
+    const p = (r, a) => [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+    const [x1, y1] = p(outer, start), [x2, y2] = p(outer, stop);
+    const [x3, y3] = p(inner, stop), [x4, y4] = p(inner, start);
+    return `M${x1} ${y1} A${outer} ${outer} 0 ${large} 1 ${x2} ${y2}`
+         + `L${x3} ${y3} A${inner} ${inner} 0 ${large} 0 ${x4} ${y4} Z`;
+}
+
+function vizInk(hex) {
+    // Dilim icine yazilan etiket, dolgunun parlakligina gore beyaz ya da siyah.
+    const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) > 0.55 ? "#0b0b0b" : "#ffffff";
+}
+
+function renderPie(box, chart) {
+    const slices = chart.slices.filter(s => s.value > 0);
+    const total = slices.reduce((sum, s) => sum + s.value, 0);
+
+    if (!total) {
+        box.innerHTML = `<h6 class="text-muted">${chart.title}</h6>`
+            + '<p class="text-muted small mb-0">Henuz veri yok.</p>';
+        return;
+    }
+
+    const size = 200, cx = size / 2, cy = size / 2, outer = 88, inner = 54;
+    let angle = -Math.PI / 2;  // saat 12'den basla
+    let paths = "", labels = "", rows = "";
+
+    slices.forEach(function (slice, index) {
+        const share = slice.value / total;
+        const end = angle + share * Math.PI * 2;
+        const percent = Math.round(share * 100);
+
+        // 2px'lik ayirici, dilimin uzerine yuzey renginde cizilir (cerceve degil).
+        paths += `<path class="viz-slice" data-index="${index}" d="${vizArc(cx, cy, outer, inner, angle, end)}"`
+              + ` fill="${slice.color}" stroke="var(--viz-surface)" stroke-width="2">`
+              + `<title>${slice.label}: ${slice.value} (%${percent})</title></path>`;
+
+        // Etiketler secici: sadece sigacak kadar buyuk dilimlere yazilir.
+        if (share >= 0.08) {
+            const mid = (angle + end) / 2, r = (outer + inner) / 2;
+            labels += `<text x="${cx + r * Math.cos(mid)}" y="${cy + r * Math.sin(mid)}"`
+                   + ` text-anchor="middle" dominant-baseline="central" font-size="12"`
+                   + ` font-weight="600" fill="${vizInk(slice.color)}" pointer-events="none">%${percent}</text>`;
+        }
+
+        rows += `<tr data-index="${index}">`
+             + `<td><span class="viz-swatch" style="background:${slice.color}"></span>${slice.label}</td>`
+             + `<td class="viz-value">${slice.value}</td>`
+             + `<td class="viz-percent">%${percent}</td></tr>`;
+        angle = end;
+    });
+
+    const summary = chart.slices.map(s => `${s.label} ${s.value}`).join(", ");
+    box.innerHTML = `
+        <h6 class="text-muted text-center">${chart.title}</h6>
+        <svg class="viz-pie" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}"
+             role="img" aria-label="${chart.title}: ${summary}">
+            ${paths}${labels}
+            <text x="${cx}" y="${cy - 8}" text-anchor="middle" font-size="26"
+                  font-weight="600" fill="var(--viz-text)">${total}</text>
+            <text x="${cx}" y="${cy + 14}" text-anchor="middle" font-size="11"
+                  fill="var(--viz-text-muted)">${chart.title === "Firma bazinda" ? "firma" : "mail"}</text>
+        </svg>
+        <table class="viz-legend"><tbody>${rows}</tbody></table>`;
+
+    // --- Hover: dilim ve efsane satiri birbirini vurgular ---
+    const tip = document.getElementById("vizTooltip");
+    const parts = box.querySelectorAll(".viz-slice");
+    const legendRows = box.querySelectorAll(".viz-legend tr");
+
+    function highlight(index, event) {
+        box.classList.add("is-hovering");
+        parts.forEach(p => p.classList.toggle("is-active", p.dataset.index === index));
+        legendRows.forEach(r => r.classList.toggle("is-active", r.dataset.index === index));
+        if (event) {
+            const slice = slices[Number(index)];
+            tip.textContent = `${slice.label}: ${slice.value} (%${Math.round(slice.value / total * 100)})`;
+            tip.style.display = "block";
+            tip.style.left = (event.clientX + 12) + "px";
+            tip.style.top = (event.clientY - 28) + "px";
+        }
+    }
+    function clear() {
+        box.classList.remove("is-hovering");
+        parts.forEach(p => p.classList.remove("is-active"));
+        legendRows.forEach(r => r.classList.remove("is-active"));
+        tip.style.display = "none";
+    }
+
+    parts.forEach(function (part) {
+        part.addEventListener("mousemove", e => highlight(part.dataset.index, e));
+        part.addEventListener("mouseleave", clear);
+    });
+    legendRows.forEach(function (row) {
+        row.addEventListener("mouseenter", () => highlight(row.dataset.index, null));
+        row.addEventListener("mouseleave", clear);
+    });
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+    const tip = document.createElement("div");
+    tip.id = "vizTooltip";
+    tip.className = "viz-tooltip";
+    tip.style.display = "none";
+    document.body.appendChild(tip);
+
+    document.querySelectorAll(".viz-chart").forEach(function (box) {
+        renderPie(box, VIZ_DATA[box.dataset.chart]);
+    });
+});
+
 function fmt(ts) { return ts ? ts.replace('T', ' ') : ''; }
 
 async function refreshProgress() {
@@ -99,7 +332,8 @@ async function refreshProgress() {
 
         document.getElementById('progress-counts').textContent =
             p.companies_sent + ' firma (' + p.sent + ' mail) / ' + p.companies_total + ' firma (' + p.total + ' mail) gonderildi';
-        document.getElementById('progress-pending').textContent = p.pending + ' beklemede';
+        document.getElementById('progress-pending').textContent =
+            p.pending + ' beklemede' + (p.disabled ? ' · ' + p.disabled + ' pasif haric' : '');
         document.getElementById('progress-started').textContent =
             p.started_at ? 'Baslangic: ' + fmt(p.started_at) : '';
         document.getElementById('progress-eta').textContent =

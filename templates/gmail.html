@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Gmail'den Isaretle</h2>
+<p class="text-muted">
+    Gmail'de bulunan mailler tabloda listelenir; her satirdaki firmayi
+    degistirebilir ya da bos birakabilirsiniz. Sectiginiz satirlardaki
+    firmalarin <strong>tum mailleri</strong> "gonderildi" olarak isaretlenir,
+    boylece o firmalara tekrar mail gitmez. Yeni kisi eklenmez; mailleriniz
+    okundu olarak isaretlenmez, sadece basliklar okunur.
+</p>
+
+{% if not settings.smtp_email or not settings.smtp_password %}
+<div class="alert alert-warning">
+    Once <a href="{{ url_for('settings_page') }}">Ayarlar</a> sayfasindan Gmail adresinizi ve
+    <strong>uygulama sifrenizi</strong> kaydedin; bu sayfa ayni bilgileri kullanir.
+</div>
+{% endif %}
+
+<ul class="nav nav-tabs" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link {% if mode != 'scan' %}active{% endif %}" data-bs-toggle="tab"
+                data-bs-target="#tab-query" type="button">Sorgu ile ara</button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link {% if mode == 'scan' %}active{% endif %}" data-bs-toggle="tab"
+                data-bs-target="#tab-scan" type="button">Tum sirketleri tara</button>
+    </li>
+</ul>
+
+<div class="tab-content border border-top-0 rounded-bottom p-3 mb-4 bg-white">
+    <div class="tab-pane fade {% if mode != 'scan' %}show active{% endif %}" id="tab-query">
+        <form method="post" action="{{ url_for('gmail_page') }}" class="js-loading"
+              data-loading-text="" data-loading-note="#queryNote">
+            <input type="hidden" name="mode" value="query">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-9">
+                    <label class="form-label" for="query">Arama sorgusu</label>
+                    <input type="text" class="form-control" id="query" name="query"
+                           value="{% if mode != 'scan' %}{{ query }}{% endif %}"
+                           placeholder="orn: in:sent after:2026/01/01" required>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" for="limit">En fazla mail</label>
+                    <input type="number" class="form-control" id="limit" name="limit" value="{{ limit }}" min="1" max="2000">
+                </div>
+                <div class="col-md-1 d-grid">
+                    <button type="submit" class="btn btn-primary">Ara</button>
+                </div>
+            </div>
+            <div class="form-text mt-2">
+                Ornekler:
+                <code>in:sent after:2026/01/01</code>,
+                <code>in:sent subject:(is basvurusu)</code>,
+                <code>in:anywhere from:*.com.tr</code>,
+                <code>label:teklifler</code>
+            </div>
+            <div id="queryNote" class="alert alert-info d-none mt-3 mb-0 d-flex align-items-center gap-2">
+                <span class="spinner-border spinner-border-sm" role="status"></span>
+                <span>Gmail'de araniyor, sonuclar birazdan burada listelenecek.</span>
+            </div>
+        </form>
+    </div>
+
+    <div class="tab-pane fade {% if mode == 'scan' %}show active{% endif %}" id="tab-scan">
+        <form method="post" action="{{ url_for('gmail_page') }}" class="js-loading"
+              data-loading-text="" data-loading-note="#scanNote">
+            <input type="hidden" name="mode" value="scan">
+            <p class="text-muted mb-2">
+                Veritabanindaki <strong>tum firmalarin mail adresleri</strong> Gmail'de aranir ve
+                yazistiginiz firmalar asagida listelenir. Adresler gruplanarak tek seferde
+                arandigi icin tek tek aramaya gore cok daha hizlidir, yine de kutu buyukse
+                <strong>bu islem birkac dakika surebilir</strong>.
+            </p>
+            <div class="row g-2 align-items-end">
+                <div class="col-md-9">
+                    <label class="form-label" for="scan_query">Ek filtre (istege bagli)</label>
+                    <input type="text" class="form-control" id="scan_query" name="query"
+                           value="{% if mode == 'scan' %}{{ query }}{% endif %}"
+                           placeholder="orn: after:2026/01/01 ya da in:sent">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" for="scan_limit">En fazla mail</label>
+                    <input type="number" class="form-control" id="scan_limit" name="limit" value="{{ limit }}" min="1" max="20000">
+                </div>
+                <div class="col-md-1 d-grid">
+                    <button type="submit" class="btn btn-primary">Tara</button>
+                </div>
+            </div>
+            <div class="form-check mt-2">
+                <input type="checkbox" class="form-check-input" id="pending_only" name="pending_only" value="1"
+                       {% if pending_only or mode != 'scan' %}checked{% endif %}>
+                <label class="form-check-label" for="pending_only">
+                    Sadece henuz gonderilmemis kayitlari ara (daha hizli)
+                </label>
+            </div>
+            <div id="scanNote" class="alert alert-info d-none mt-3 mb-0 d-flex align-items-center gap-2">
+                <span class="spinner-border spinner-border-sm" role="status"></span>
+                <span>
+                    Gmail taraniyor, bu islem birkac dakika surebilir.
+                    <strong>Sayfayi kapatmayin</strong>; tarama bitince sonuclar burada listelenecek.
+                </span>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if result is not none %}
+    <p class="text-muted">
+        {% if result.scanned is defined %}<strong>{{ result.scanned }}</strong> kayitli adres tarandi &middot;{% endif %}
+        <strong>{{ result.matched }}</strong> mail bulundu &middot;
+        <strong>{{ rows|length }}</strong> farkli adres &middot;
+        <strong>{{ rows|selectattr('company')|list|length }}</strong> tanesi bir firmayla eslesti
+    </p>
+
+    {% if not rows %}
+    <p class="text-muted">Sorguya uyan mail bulunamadi.</p>
+    {% else %}
+    <datalist id="companyList">
+        {% for name in company_names %}<option value="{{ name }}">{% endfor %}
+    </datalist>
+
+    <form method="post" action="{{ url_for('gmail_mark_sent') }}" class="js-loading"
+          data-loading-text="Isaretleniyor..."
+          onsubmit="return confirm('Secilen satirlardaki firmalarin tum mailleri gonderildi olarak isaretlenecek. Onayliyor musunuz?');">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="d-flex align-items-center gap-3">
+                <div class="form-check mb-0">
+                    <input type="checkbox" class="form-check-input" id="pickAll">
+                    <label class="form-check-label" for="pickAll">Tumunu sec</label>
+                </div>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="pickMatched">
+                    Sadece eslesenleri sec
+                </button>
+                <span class="text-muted small"><span id="pickCount">0</span> satir secili</span>
+            </div>
+            <button type="submit" class="btn btn-success btn-sm">Secilenleri Gonderildi Isaretle</button>
+        </div>
+
+        <div class="table-responsive" style="max-height: 70vh; overflow-y: auto;">
+        <table class="table table-sm table-striped align-middle bg-white">
+            <thead class="table-light position-sticky top-0">
+                <tr>
+                    <th style="width:2.5rem;"></th>
+                    <th style="width:22%;">Mail adresi</th>
+                    <th style="width:18%;">Gmail'deki ad</th>
+                    <th>Konu</th>
+                    <th style="width:9.5rem;">Tarih</th>
+                    <th style="width:26%;">Eslesen firma</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in rows %}
+                <tr>
+                    <td>
+                        <input type="checkbox" class="form-check-input pick" name="pick" value="{{ loop.index0 }}"
+                               {% if r.company and r.company_pending %}checked{% endif %}>
+                        <input type="hidden" name="date_{{ loop.index0 }}" value="{{ r.date }}">
+                    </td>
+                    <td class="small">
+                        {{ r.email }}
+                        {% if r.count > 1 %}<span class="badge bg-light text-dark border">{{ r.count }} mail</span>{% endif %}
+                        {% if r.noreply %}<span class="badge bg-warning text-dark">no-reply</span>{% endif %}
+                    </td>
+                    <td class="small text-truncate" style="max-width: 12rem;">{{ r.name }}</td>
+                    <td class="small text-muted text-truncate" style="max-width: 18rem;">{{ r.subject }}</td>
+                    <td class="small text-muted">{{ (r.date or '').replace('T', ' ')[:16] }}</td>
+                    <td>
+                        <input type="text" class="form-control form-control-sm company-input" list="companyList"
+                               name="company_{{ loop.index0 }}" value="{{ r.company }}"
+                               placeholder="firma secin veya yazin">
+                        {% if r.match_type == 'email' %}
+                        <span class="badge bg-success mt-1">tam adres</span>
+                        {% elif r.match_type == 'domain' %}
+                        <span class="badge bg-warning text-dark mt-1" title="Adres birebir kayitli degil, ayni alan adi">alan adi</span>
+                        {% else %}
+                        <span class="badge bg-secondary mt-1">eslesme yok</span>
+                        {% endif %}
+                        {% if r.company %}
+                        <span class="text-muted small ms-1">
+                            {{ r.company_pending }}/{{ r.company_total }} mail isaretlenecek
+                        </span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+
+        <button type="submit" class="btn btn-success mt-2">Secilenleri Gonderildi Isaretle</button>
+    </form>
+    {% endif %}
+{% endif %}
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    // --- Gonderim sirasinda butonlara yukleniyor durumu ---
+    document.querySelectorAll("form.js-loading").forEach(function (form) {
+        form.addEventListener("submit", function (event) {
+            // Onay kutusundan "vazgec" denmisse (inline onsubmit false donmusse)
+            // form gonderilmez; butonu kilitlemek yanlis olur.
+            if (event.defaultPrevented || form.dataset.busy) return;
+            form.dataset.busy = "1";
+
+            // Dar butonlarda (Ara / Tara) yazi tasar; oralarda sadece donen
+            // simge gosterilir, aciklama alttaki bilgi kutusunda kalir.
+            const label = form.dataset.loadingText === undefined ? "Bekleyin..." : form.dataset.loadingText;
+            form.querySelectorAll("button[type=submit]").forEach(function (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"'
+                    + ' aria-label="Calisiyor"></span>' + (label ? " " + label : "");
+            });
+
+            const note = form.dataset.loadingNote && document.querySelector(form.dataset.loadingNote);
+            if (note) note.classList.remove("d-none");
+        });
+    });
+
+    const all = document.getElementById("pickAll");
+    if (!all) return;
+    const picks = Array.from(document.querySelectorAll(".pick"));
+    const countSpan = document.getElementById("pickCount");
+
+    function updateCount() {
+        countSpan.textContent = picks.filter(function (cb) { return cb.checked; }).length;
+        all.checked = picks.every(function (cb) { return cb.checked; });
+    }
+
+    all.addEventListener("change", function () {
+        picks.forEach(function (cb) { cb.checked = all.checked; });
+        updateCount();
+    });
+    picks.forEach(function (cb) { cb.addEventListener("change", updateCount); });
+
+    // Firma alani bosken satiri isaretlemek anlamsiz; yazilinca otomatik secilir.
+    document.querySelectorAll(".company-input").forEach(function (input) {
+        input.addEventListener("change", function () {
+            const row = input.closest("tr");
+            row.querySelector(".pick").checked = input.value.trim() !== "";
+            updateCount();
+        });
+    });
+
+    document.getElementById("pickMatched").addEventListener("click", function () {
+        picks.forEach(function (cb) {
+            const value = cb.closest("tr").querySelector(".company-input").value.trim();
+            cb.checked = value !== "";
+        });
+        updateCount();
+    });
+
+    updateCount();
+});
+</script>
+{% endblock %}

@@ -10,41 +10,99 @@
         <h2 class="mb-0">Sirketler</h2>
         <span class="text-muted">Toplam <strong>{{ total_companies }}</strong> sirket &middot; <strong>{{ total_mails }}</strong> mail</span>
     </div>
-    <div class="d-flex gap-2">
-        <button type="button" id="deleteSelectedBtn" class="btn btn-danger btn-sm" disabled>
-            Secilenleri Sil (<span id="selectedCount">0</span>)
+    <div class="dropdown">
+        <button type="button" id="actionsBtn" class="btn btn-primary dropdown-toggle"
+                data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+            Aksiyonlar
         </button>
-        <button type="button" id="checkMailsBtn" class="btn btn-outline-primary btn-sm">
-            <span id="checkSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
-            <span id="checkBtnText">Mailleri Kontrol Et</span>
-        </button>
-        <form method="post" action="{{ url_for('dedupe_contacts') }}" onsubmit="return confirm('Ayni maile sahip tekrar eden kayitlar silinecek (gonderilmis olan korunur). Devam edilsin mi?');">
-            <button type="submit" class="btn btn-outline-secondary btn-sm">Tekrar Edenleri Temizle</button>
-        </form>
-        <form method="post" action="{{ url_for('clear_contacts') }}" onsubmit="return confirm('Tum kisi listesi silinecek, emin misiniz?');">
-            <button type="submit" class="btn btn-outline-danger btn-sm">Listeyi Temizle</button>
-        </form>
+        <ul class="dropdown-menu dropdown-menu-end shadow" style="min-width: 17rem;">
+            <li><h6 class="dropdown-header">Secili sirketler (<span id="selectedCount">0</span>)</h6></li>
+            <li>
+                <button type="button" id="enableSelectedBtn" class="dropdown-item" disabled>
+                    Aktif et <span class="text-muted small">&mdash; tekrar mail gonderilir</span>
+                </button>
+            </li>
+            <li>
+                <button type="button" id="disableSelectedBtn" class="dropdown-item" disabled>
+                    Pasif et <span class="text-muted small">&mdash; mail gonderilmez</span>
+                </button>
+            </li>
+            <li>
+                <button type="button" id="deleteSelectedBtn" class="dropdown-item text-danger" disabled>
+                    Sil
+                </button>
+            </li>
+
+            <li><hr class="dropdown-divider"></li>
+            <li><h6 class="dropdown-header">Tum liste</h6></li>
+            <li>
+                <form method="post" action="{{ url_for('check_replies') }}" class="js-loading"
+                      data-loading-text="Kontrol ediliyor..."
+                      onsubmit="return confirm('Mail atilan firmalardan gelen cevaplar Gmail\'de aranacak. Bu islem birkac dakika surebilir. Devam edilsin mi?');">
+                    <button type="submit" class="dropdown-item">Geri donus kontrol et</button>
+                </form>
+            </li>
+            <li>
+                <button type="button" id="checkMailsBtn" class="dropdown-item">
+                    <span id="checkSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                    <span id="checkBtnText">Mailleri kontrol et</span>
+                </button>
+            </li>
+            <li>
+                <form method="post" action="{{ url_for('dedupe_contacts') }}"
+                      onsubmit="return confirm('Ayni maile sahip tekrar eden kayitlar silinecek (gonderilmis olan korunur). Devam edilsin mi?');">
+                    <button type="submit" class="dropdown-item">Tekrar edenleri temizle</button>
+                </form>
+            </li>
+
+            <li><hr class="dropdown-divider"></li>
+            <li>
+                <form method="post" action="{{ url_for('clear_contacts') }}"
+                      onsubmit="return confirm('Tum kisi listesi silinecek, emin misiniz?');">
+                    <button type="submit" class="dropdown-item text-danger">Listeyi temizle</button>
+                </form>
+            </li>
+        </ul>
     </div>
 </div>
 
-<div class="btn-group mb-3" role="group">
-    <a href="{{ url_for('contacts_page') }}"
-       class="btn btn-sm {{ 'btn-primary' if not status else 'btn-outline-primary' }}">Tumu</a>
-    <a href="{{ url_for('contacts_page', status='pending') }}"
-       class="btn btn-sm {{ 'btn-warning' if status == 'pending' else 'btn-outline-warning' }}">Beklemede</a>
-    <a href="{{ url_for('contacts_page', status='sent') }}"
-       class="btn btn-sm {{ 'btn-success' if status == 'sent' else 'btn-outline-success' }}">Gonderildi</a>
-    <a href="{{ url_for('contacts_page', status='failed') }}"
-       class="btn btn-sm {{ 'btn-danger' if status == 'failed' else 'btn-outline-danger' }}">Basarisiz</a>
+<div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
+    <div class="btn-group" role="group">
+        <a href="{{ url_for('contacts_page') }}"
+           class="btn btn-sm {{ 'btn-primary' if not status and not only_disabled else 'btn-outline-primary' }}">Tumu</a>
+        <a href="{{ url_for('contacts_page', status='pending') }}"
+           class="btn btn-sm {{ 'btn-warning' if status == 'pending' else 'btn-outline-warning' }}">Beklemede</a>
+        <a href="{{ url_for('contacts_page', status='sent') }}"
+           class="btn btn-sm {{ 'btn-success' if status == 'sent' else 'btn-outline-success' }}">Gonderildi</a>
+        <a href="{{ url_for('contacts_page', status='failed') }}"
+           class="btn btn-sm {{ 'btn-danger' if status == 'failed' else 'btn-outline-danger' }}">Basarisiz</a>
+        <a href="{{ url_for('contacts_page', view='replied') }}"
+           class="btn btn-sm {{ 'btn-info' if only_replied else 'btn-outline-info' }}">
+            Geri donus{% if replied_companies %} ({{ replied_companies }}){% endif %}
+        </a>
+        <a href="{{ url_for('contacts_page', view='disabled') }}"
+           class="btn btn-sm {{ 'btn-dark' if only_disabled else 'btn-outline-dark' }}">
+            Pasif{% if stats.disabled %} ({{ stats.disabled }}){% endif %}
+        </a>
+    </div>
+
+    <div class="form-check mb-0">
+        <input type="checkbox" class="form-check-input" id="selectAllCompanies">
+        <label class="form-check-label small text-muted" for="selectAllCompanies">Gorunenlerin hepsini sec</label>
+    </div>
 </div>
 
 {% if not companies %}
 <p class="text-muted">Kayit bulunamadi.</p>
 {% endif %}
 
+<style>
+    .accordion-item.company-disabled .accordion-button { opacity: .55; }
+</style>
+
 <div class="accordion" id="companies">
     {% for company in companies %}
-    <div class="accordion-item"
+    <div class="accordion-item{% if not company.enabled %} company-disabled{% endif %}"
          data-search="{{ (company.name ~ ' ' ~ (company.contacts|map(attribute='email')|join(' ')))|lower }}">
         <h2 class="accordion-header d-flex align-items-stretch">
             <div class="d-flex align-items-center ps-3 bg-body">
@@ -54,12 +112,23 @@
             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                     data-bs-target="#company-{{ loop.index }}" style="width: auto; flex: 1 1 auto;">
                 <span class="me-3 fw-bold">{{ company.name }}</span>
+                <span class="badge bg-dark me-1 disabled-badge {% if company.enabled %}d-none{% endif %}">Pasif</span>
+                {% if company.replied %}
+                <span class="badge bg-info text-dark me-1"
+                      title="Son cevap: {{ (company.replied_at or '').replace('T', ' ')[:16] }}">Geri donus</span>
+                {% endif %}
                 <span class="badge bg-secondary me-1">{{ company.total }} mail</span>
                 {% if company.sent %}<span class="badge bg-success me-1">{{ company.sent }} gonderildi</span>{% endif %}
                 {% if company.pending %}<span class="badge bg-warning text-dark me-1">{{ company.pending }} beklemede</span>{% endif %}
                 {% if company.failed %}<span class="badge bg-danger me-1">{{ company.failed }} basarisiz</span>{% endif %}
             </button>
-            <div class="d-flex align-items-center pe-3 bg-body">
+            <div class="d-flex align-items-center gap-3 pe-3 bg-body">
+                <div class="form-check form-switch mb-0" title="Kapaliyken bu sirkete mail gonderilmez">
+                    <input class="form-check-input company-toggle" type="checkbox" role="switch"
+                           data-company="{{ company.name }}"
+                           {% if company.enabled %}checked{% endif %}
+                           aria-label="{{ company.name }} sirketine mail gonderimi">
+                </div>
                 <button type="button" class="btn btn-sm btn-outline-danger delete-company-btn"
                         data-company="{{ company.name }}">Sil</button>
             </div>
@@ -127,6 +196,31 @@
 // base.html bootstrap bundle'i bu blocktan SONRA yukledigi icin
 // kodu DOMContentLoaded'a sariyoruz; aksi halde `bootstrap` tanimsiz olur.
 document.addEventListener("DOMContentLoaded", function () {
+    // --- Uzun suren islemlerde butona yukleniyor durumu ---
+    const actionsBtn = document.getElementById("actionsBtn");
+
+    function setActionsBusy(label) {
+        // Islem menuden baslatildigi icin durum, menu kapansa da gorunur
+        // kalsin diye ana butona da yansitilir.
+        actionsBtn.disabled = true;
+        actionsBtn.classList.remove("dropdown-toggle");
+        actionsBtn.innerHTML =
+            '<span class="spinner-border spinner-border-sm me-1" role="status"></span>' + label;
+    }
+
+    document.querySelectorAll("form.js-loading").forEach(function (form) {
+        form.addEventListener("submit", function (event) {
+            if (event.defaultPrevented || form.dataset.busy) return;  // onaydan vazgecildi
+            form.dataset.busy = "1";
+            const label = form.dataset.loadingText || "Bekleyin...";
+            form.querySelectorAll("button[type=submit]").forEach(function (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>' + label;
+            });
+            setActionsBusy(label);
+        });
+    });
+
     // --- Arama: en az 3 karakter yazilinca sirket adi/mail'e gore filtrele ---
     const searchInput = document.getElementById("companySearchInput");
     const accordionItems = document.querySelectorAll("#companies .accordion-item");
@@ -143,18 +237,38 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
-    // --- Checkbox ile coklu/tekli sirket silme ---
+    // --- Checkbox ile coklu/tekli sirket islemleri ---
     const deleteSelectedBtn = document.getElementById("deleteSelectedBtn");
+    const enableSelectedBtn = document.getElementById("enableSelectedBtn");
+    const disableSelectedBtn = document.getElementById("disableSelectedBtn");
     const selectedCountSpan = document.getElementById("selectedCount");
+    const selectAllCheckbox = document.getElementById("selectAllCompanies");
+
+    function selectedNames() {
+        return Array.from(document.querySelectorAll(".company-checkbox:checked"))
+            .map(function (cb) { return cb.value; });
+    }
 
     function updateBulkButton() {
         const count = document.querySelectorAll(".company-checkbox:checked").length;
         selectedCountSpan.textContent = count;
         deleteSelectedBtn.disabled = count === 0;
+        enableSelectedBtn.disabled = count === 0;
+        disableSelectedBtn.disabled = count === 0;
     }
 
     document.querySelectorAll(".company-checkbox").forEach(function (cb) {
         cb.addEventListener("change", updateBulkButton);
+    });
+
+    // Aramayla gizlenmis sirketler secilmez; sadece ekranda gorunenler secilir.
+    selectAllCheckbox.addEventListener("change", function () {
+        accordionItems.forEach(function (item) {
+            if (item.classList.contains("d-none")) return;
+            const cb = item.querySelector(".company-checkbox");
+            if (cb) cb.checked = selectAllCheckbox.checked;
+        });
+        updateBulkButton();
     });
 
     async function deleteCompanies(names) {
@@ -166,9 +280,60 @@ document.addEventListener("DOMContentLoaded", function () {
         return resp.json();
     }
 
+    // --- Aktif / Pasif ---
+    async function setCompaniesEnabled(names, enabled) {
+        const resp = await fetch("{{ url_for('toggle_companies') }}", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ names: names, enabled: enabled }),
+        });
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        return resp.json();
+    }
+
+    function paintCompany(item, enabled) {
+        item.classList.toggle("company-disabled", !enabled);
+        const badge = item.querySelector(".disabled-badge");
+        if (badge) badge.classList.toggle("d-none", enabled);
+    }
+
+    document.querySelectorAll(".company-toggle").forEach(function (toggle) {
+        toggle.addEventListener("change", async function () {
+            const item = toggle.closest(".accordion-item");
+            const enabled = toggle.checked;
+            toggle.disabled = true;
+            try {
+                await setCompaniesEnabled([toggle.dataset.company], enabled);
+                paintCompany(item, enabled);
+            } catch (e) {
+                toggle.checked = !enabled;  // sunucu yazamadi, anahtari geri al
+                alert("Durum degistirilemedi: " + e);
+            } finally {
+                toggle.disabled = false;
+            }
+        });
+    });
+
+    [[enableSelectedBtn, true], [disableSelectedBtn, false]].forEach(function (pair) {
+        const [button, enabled] = pair;
+        button.addEventListener("click", async function () {
+            const selected = selectedNames();
+            if (selected.length === 0) return;
+            const label = enabled ? "aktif" : "pasif";
+            if (!confirm(selected.length + " sirket " + label + " yapilacak. Onayliyor musunuz?")) return;
+            button.disabled = true;
+            try {
+                await setCompaniesEnabled(selected, enabled);
+                window.location.reload();
+            } catch (e) {
+                alert("Durum degistirilemedi: " + e);
+                button.disabled = false;
+            }
+        });
+    });
+
     deleteSelectedBtn.addEventListener("click", async function () {
-        const selected = Array.from(document.querySelectorAll(".company-checkbox:checked"))
-            .map(function (cb) { return cb.value; });
+        const selected = selectedNames();
         if (selected.length === 0) return;
         if (!confirm(selected.length + " sirkete ait tum kayitlar silinecek. Onayliyor musunuz?")) return;
         deleteSelectedBtn.disabled = true;
@@ -210,7 +375,14 @@ document.addEventListener("DOMContentLoaded", function () {
     function setLoading(loading) {
         btn.disabled = loading;
         spinner.classList.toggle("d-none", !loading);
-        btnText.textContent = loading ? "Kontrol ediliyor..." : "Mailleri Kontrol Et";
+        btnText.textContent = loading ? "Kontrol ediliyor..." : "Mailleri kontrol et";
+        if (loading) {
+            setActionsBusy("Kontrol ediliyor...");
+        } else {
+            actionsBtn.disabled = false;
+            actionsBtn.classList.add("dropdown-toggle");
+            actionsBtn.textContent = "Aksiyonlar";
+        }
     }
 
     btn.addEventListener("click", async function () {

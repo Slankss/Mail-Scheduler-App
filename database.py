@@ -37,7 +37,19 @@ def init_db():
             name TEXT,
             email TEXT NOT NULL,
             status TEXT DEFAULT 'pending',
-            sent_at TEXT
+            sent_at TEXT,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            replied INTEGER NOT NULL DEFAULT 0,
+            replied_at TEXT
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS schedules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            start_at TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT NOT NULL,
+            note TEXT
         )
     """)
     conn.execute("""
@@ -55,6 +67,16 @@ def init_db():
         conn.execute("ALTER TABLE settings ADD COLUMN scheduler_started_at TEXT")
     if "daily_limit" not in cols:
         conn.execute("ALTER TABLE settings ADD COLUMN daily_limit INTEGER DEFAULT 0")
+    contact_cols = {row["name"] for row in conn.execute("PRAGMA table_info(contacts)")}
+    if "enabled" not in contact_cols:
+        conn.execute(
+            "ALTER TABLE contacts ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1"
+        )
+    if "replied" not in contact_cols:
+        conn.execute(
+            "ALTER TABLE contacts ADD COLUMN replied INTEGER NOT NULL DEFAULT 0"
+        )
+        conn.execute("ALTER TABLE contacts ADD COLUMN replied_at TEXT")
     conn.commit()
     conn.close()
 
@@ -106,6 +128,61 @@ def set_scheduler_active(active: bool):
         conn.execute("UPDATE settings SET scheduler_active = 0 WHERE id = 1")
     conn.commit()
     conn.close()
+
+
+def add_schedule(start_at):
+    """Gelecekteki bir baslangic zamani kaydeder ve id'sini dondurur.
+
+    Zamanlamalar veritabaninda tutulur; APScheduler islerini bellekte tuttugu
+    icin uygulama yeniden baslarsa kayit olmadan hepsi kaybolurdu.
+    """
+    conn = get_db_connection()
+    cur = conn.execute(
+        "INSERT INTO schedules (start_at, status, created_at) VALUES (?, 'pending', ?)",
+        (start_at, datetime.now().isoformat(timespec="seconds")),
+    )
+    conn.commit()
+    schedule_id = cur.lastrowid
+    conn.close()
+    return schedule_id
+
+
+def get_schedules(limit=50):
+    """Zamanlamalar: bekleyenler once, sonra en yeni tamamlananlar."""
+    conn = get_db_connection()
+    rows = conn.execute(
+        """
+        SELECT * FROM schedules
+        ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END,
+                 CASE status WHEN 'pending' THEN start_at END ASC,
+                 start_at DESC
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+    conn.close()
+    return rows
+
+
+def get_pending_schedules():
+    conn = get_db_connection()
+    rows = conn.execute(
+        "SELECT * FROM schedules WHERE status = 'pending' ORDER BY start_at"
+    ).fetchall()
+    conn.close()
+    return rows
+
+
+def set_schedule_status(schedule_id, status, note=None):
+    conn = get_db_connection()
+    cur = conn.execute(
+        "UPDATE schedules SET status = ?, note = ? WHERE id = ? AND status = 'pending'",
+        (status, note, schedule_id),
+    )
+    changed = cur.rowcount
+    conn.commit()
+    conn.close()
+    return changed
 
 
 def import_contacts(rows):
@@ -177,7 +254,8 @@ def dedupe_contacts():
 def get_pending_contacts(limit):
     conn = get_db_connection()
     rows = conn.execute(
-        "SELECT * FROM contacts WHERE status = 'pending' LIMIT ?", (limit,)
+        "SELECT * FROM contacts WHERE status = 'pending' AND enabled = 1 LIMIT ?",
+        (limit,),
     ).fetchall()
     conn.close()
     return rows
@@ -187,13 +265,14 @@ def get_sendable_contacts(limit):
     """Return contacts to send to, retrying failed ones first, then pending.
 
     Failed contacts are ordered before pending ones so that earlier failures
-    are re-attempted before new mails go out.
+    are re-attempted before new mails go out. Contacts belonging to a disabled
+    company (enabled = 0) are never returned.
     """
     conn = get_db_connection()
     rows = conn.execute(
         """
         SELECT * FROM contacts
-        WHERE status IN ('failed', 'pending')
+        WHERE status IN ('failed', 'pending') AND enabled = 1
         ORDER BY CASE status WHEN 'failed' THEN 0 ELSE 1 END, id
         LIMIT ?
         """,
@@ -235,6 +314,75 @@ def mark_contact_failed(contact_id):
     conn.close()
 
 
+def mark_companies_sent(entries):
+    """Verilen sirketlerin TUM kayitlarini 'gonderildi' olarak isaretler.
+
+    `entries`: (sirket_adi, sent_at) ciftleri. sent_at, mailin Gmail'deki
+    gercek tarihidir; bos birakilirsa su an kullanilir. Zaten 'sent' olan
+    kayitlara dokunulmaz, boylece orijinal gonderim zamanlari korunur.
+
+    Gecmise donuk tarih yazmak bilerek tercih edildi: count_sent_today() bugun
+    gonderilenleri sayar, eski yazismalar gunluk limiti doldurmamalidir.
+
+    Returns: guncellenen kayit sayisi.
+    """
+    if not entries:
+        return 0
+    conn = get_db_connection()
+    updated = 0
+    for name, sent_at in entries:
+        real_name = "" if name == "(Isimsiz)" else name
+        cur = conn.execute(
+            """
+            UPDATE contacts SET status = 'sent', sent_at = ?
+            WHERE TRIM(COALESCE(name, '')) = ? AND status != 'sent'
+            """,
+            (sent_at or datetime.now().isoformat(timespec="seconds"), real_name),
+        )
+        updated += cur.rowcount
+    conn.commit()
+    conn.close()
+    return updated
+
+
+def mark_companies_replied(entries):
+    """Verilen sirketlerin tum kayitlarini 'geri donus yapti' olarak isaretler.
+
+    `entries`: (sirket_adi, replied_at) ciftleri. Geri donus firma bazinda
+    tutulur: firmanin hangi adresi cevap yazarsa yazsin firma donus yapmis
+    sayilir. Zaten isaretli kayitlarin tarihi korunur.
+
+    Returns: guncellenen kayit sayisi.
+    """
+    if not entries:
+        return 0
+    conn = get_db_connection()
+    updated = 0
+    for name, replied_at in entries:
+        real_name = "" if name == "(Isimsiz)" else name
+        cur = conn.execute(
+            """
+            UPDATE contacts SET replied = 1, replied_at = ?
+            WHERE TRIM(COALESCE(name, '')) = ? AND replied = 0
+            """,
+            (replied_at or datetime.now().isoformat(timespec="seconds"), real_name),
+        )
+        updated += cur.rowcount
+    conn.commit()
+    conn.close()
+    return updated
+
+
+def get_sent_contacts():
+    """Mail gonderilmis kayitlar (geri donus taramasinin hedefi)."""
+    conn = get_db_connection()
+    rows = conn.execute(
+        "SELECT * FROM contacts WHERE status = 'sent' ORDER BY id"
+    ).fetchall()
+    conn.close()
+    return rows
+
+
 def get_all_contacts(state: str = None):
     conn = get_db_connection()
     if state is not None:
@@ -248,9 +396,14 @@ def get_all_contacts(state: str = None):
 def get_companies(state: str = None):
     """Group contacts by company name.
 
-    Returns a list of dicts: {name, contacts, total, sent, pending, failed}.
+    Returns a list of dicts:
+    {name, contacts, total, sent, pending, failed, disabled, enabled}.
     When `state` is given, only contacts with that status are listed, and
     companies with no matching contact are excluded.
+
+    `enabled` is False as soon as one of the company's contacts is disabled;
+    set_company_enabled() always writes every contact of a company at once, so
+    a mixed state only shows up for hand-edited databases.
     """
     contacts = get_all_contacts(state)
     grouped = {}
@@ -258,13 +411,54 @@ def get_companies(state: str = None):
         key = (c["name"] or "").strip() or "(Isimsiz)"
         company = grouped.setdefault(
             key,
-            {"name": key, "contacts": [], "total": 0, "sent": 0, "pending": 0, "failed": 0},
+            {
+                "name": key,
+                "contacts": [],
+                "total": 0,
+                "sent": 0,
+                "pending": 0,
+                "failed": 0,
+                "disabled": 0,
+                "enabled": True,
+                "replied": 0,
+                "replied_at": None,
+            },
         )
         company["contacts"].append(c)
         company["total"] += 1
         if c["status"] in ("sent", "pending", "failed"):
             company[c["status"]] += 1
+        if not c["enabled"]:
+            company["disabled"] += 1
+            company["enabled"] = False
+        if c["replied"]:
+            company["replied"] += 1
+            if (c["replied_at"] or "") > (company["replied_at"] or ""):
+                company["replied_at"] = c["replied_at"]
     return sorted(grouped.values(), key=lambda x: x["name"].lower())
+
+
+def set_company_enabled(names, enabled: bool):
+    """Enable/disable every contact of the given companies.
+
+    Disabled companies are skipped by the scheduler. get_companies() groups
+    blank names under "(Isimsiz)", so that placeholder is mapped back to an
+    empty string here. Returns the number of updated contacts.
+    """
+    if not names:
+        return 0
+    conn = get_db_connection()
+    updated = 0
+    for name in names:
+        real_name = "" if name == "(Isimsiz)" else name
+        cur = conn.execute(
+            "UPDATE contacts SET enabled = ? WHERE TRIM(COALESCE(name, '')) = ?",
+            (1 if enabled else 0, real_name),
+        )
+        updated += cur.rowcount
+    conn.commit()
+    conn.close()
+    return updated
 
 
 def add_attachment(filename, path):
@@ -299,14 +493,40 @@ def delete_attachment(attachment_id):
     conn.close()
 
 
-def get_stats():
+def get_stats(only_enabled: bool = False):
+    """Contact counts per status.
+
+    With `only_enabled`, contacts of disabled companies are left out so that
+    progress / ETA are computed over the mails that will actually be sent.
+    `disabled` always counts every disabled contact.
+    """
     conn = get_db_connection()
-    total = conn.execute("SELECT COUNT(*) FROM contacts").fetchone()[0]
-    sent = conn.execute("SELECT COUNT(*) FROM contacts WHERE status = 'sent'").fetchone()[0]
-    pending = conn.execute("SELECT COUNT(*) FROM contacts WHERE status = 'pending'").fetchone()[0]
-    failed = conn.execute("SELECT COUNT(*) FROM contacts WHERE status = 'failed'").fetchone()[0]
+    active = "enabled = 1" if only_enabled else "1 = 1"
+    total = conn.execute(f"SELECT COUNT(*) FROM contacts WHERE {active}").fetchone()[0]
+    sent = conn.execute(
+        f"SELECT COUNT(*) FROM contacts WHERE status = 'sent' AND {active}"
+    ).fetchone()[0]
+    pending = conn.execute(
+        f"SELECT COUNT(*) FROM contacts WHERE status = 'pending' AND {active}"
+    ).fetchone()[0]
+    failed = conn.execute(
+        f"SELECT COUNT(*) FROM contacts WHERE status = 'failed' AND {active}"
+    ).fetchone()[0]
+    disabled = conn.execute(
+        "SELECT COUNT(*) FROM contacts WHERE enabled = 0"
+    ).fetchone()[0]
+    replied = conn.execute(
+        f"SELECT COUNT(*) FROM contacts WHERE replied = 1 AND {active}"
+    ).fetchone()[0]
     conn.close()
-    return {"total": total, "sent": sent, "pending": pending, "failed": failed}
+    return {
+        "total": total,
+        "sent": sent,
+        "pending": pending,
+        "failed": failed,
+        "disabled": disabled,
+        "replied": replied,
+    }
 
 
 def clear_contacts():

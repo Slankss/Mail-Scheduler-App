@@ -4,6 +4,31 @@ from email.message import EmailMessage
 from mimetypes import guess_type
 
 
+def connect(server_addr, port, email, password, timeout=30):
+    """Giris yapilmis bir SMTP baglantisi dondurur.
+
+    Port 465 ise SMTP_SSL, degilse STARTTLS kullanilir. Baglanti `with` ile
+    kullanilmalidir; cikista QUIT gonderilir.
+    """
+    port = int(port)
+    if port == 465:
+        server = smtplib.SMTP_SSL(server_addr, port, timeout=timeout)
+    else:
+        server = smtplib.SMTP(server_addr, port, timeout=timeout)
+        server.starttls()
+    server.login(email, password)
+    return server
+
+
+def test_connection(server_addr, port, email, password, timeout=15):
+    """Mail gondermeden sunucuya baglanip giris yapmayi dener.
+
+    Basarisizsa smtplib/socket istisnasi firlatir.
+    """
+    with connect(server_addr, port, email, password, timeout=timeout) as server:
+        server.noop()
+
+
 def send_email(settings, to_email, subject, body, attachments=None):
     """Send a single email using SMTP settings stored in the settings row.
 
@@ -29,15 +54,10 @@ def send_email(settings, to_email, subject, body, attachments=None):
                 filename=os.path.basename(path),
             )
 
-    server_addr = settings["smtp_server"]
-    port = int(settings["smtp_port"])
-
-    if port == 465:
-        with smtplib.SMTP_SSL(server_addr, port, timeout=30) as server:
-            server.login(settings["smtp_email"], settings["smtp_password"])
-            server.send_message(msg)
-    else:
-        with smtplib.SMTP(server_addr, port, timeout=30) as server:
-            server.starttls()
-            server.login(settings["smtp_email"], settings["smtp_password"])
-            server.send_message(msg)
+    with connect(
+        settings["smtp_server"],
+        settings["smtp_port"],
+        settings["smtp_email"],
+        settings["smtp_password"],
+    ) as server:
+        server.send_message(msg)

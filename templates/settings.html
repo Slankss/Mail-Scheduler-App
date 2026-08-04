@@ -77,8 +77,55 @@
     </div>
     {% endif %}
 
-    <button type="submit" class="btn btn-primary">Kaydet</button>
+    <div class="d-flex align-items-center gap-2">
+        <button type="submit" class="btn btn-primary">Kaydet</button>
+        <button type="button" id="testConnBtn" class="btn btn-outline-secondary">
+            Baglantiyi Test Et
+        </button>
+        <span class="text-muted small">Mail gondermeden, formdaki bilgilerle dener.</span>
+    </div>
+    <div id="testResult" class="mt-3"></div>
 </form>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const btn = document.getElementById("testConnBtn");
+    const out = document.getElementById("testResult");
+    const form = btn.closest("form");
+    const value = (name) => (form.elements[name] ? form.elements[name].value : "");
+
+    btn.addEventListener("click", async function () {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>Deneniyor...';
+        out.innerHTML = "";
+        try {
+            const resp = await fetch("{{ url_for('settings_test_connection') }}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    smtp_server: value("smtp_server"),
+                    smtp_port: value("smtp_port"),
+                    smtp_email: value("smtp_email"),
+                    smtp_password: value("smtp_password"),
+                }),
+            });
+            const data = await resp.json();
+            // ok === null: denenmedi (Gmail disi hesapta IMAP gibi)
+            out.innerHTML = data.checks.map(function (c) {
+                const tone = c.ok === null ? "secondary" : (c.ok ? "success" : "danger");
+                const icon = c.ok === null ? "&ndash;" : (c.ok ? "&check;" : "&times;");
+                return `<div class="alert alert-${tone} py-2 mb-2">`
+                     + `<strong>${icon} ${c.name}</strong><div class="small">${c.detail}</div></div>`;
+            }).join("");
+        } catch (e) {
+            out.innerHTML = `<div class="alert alert-danger py-2">Test yapilamadi: ${e}</div>`;
+        } finally {
+            btn.disabled = false;
+            btn.textContent = "Baglantiyi Test Et";
+        }
+    });
+});
+</script>
 
 <div class="alert alert-info mt-4">
     Gmail kullaniyorsaniz normal sifre yerine
