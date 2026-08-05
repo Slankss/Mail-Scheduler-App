@@ -1219,5 +1219,104 @@
     "saglayici": "Microsoft 365",
     "not": "",
     "firma_adi": "Uyumsoft (.com)"
+  },
+  {
+    "alan": "dataliva.com",
+    "mx_var": true,
+    "mx": [
+      "dataliva-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Dataliva"
+  },
+  {
+    "alan": "applogist.com",
+    "mx_var": true,
+    "mx": [
+      "applogist-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Applogist"
+  },
+  {
+    "alan": "odeontechnology.com",
+    "mx_var": true,
+    "mx": [
+      "odeontechnology-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Odeon Technology"
+  },
+  {
+    "alan": "moneypay.com.tr",
+    "mx_var": true,
+    "mx": [
+      "moneypay-com-tr.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "MoneyPay"
+  },
+  {
+    "alan": "argela.com.tr",
+    "mx_var": true,
+    "mx": [
+      "argela-com-tr.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Argela"
+  },
+  {
+    "alan": "quicksigorta.com",
+    "mx_var": true,
+    "mx": [
+      "mx1.hc2508-60.eu.iphmx.com",
+      "mx2.hc2508-60.eu.iphmx.com",
+      "quicksigorta-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Quick Sigorta"
+  },
+  {
+    "alan": "pozitiftech.com",
+    "mx_var": true,
+    "mx": [
+      "pozitiftech-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Pozitif Teknoloji"
+  },
+  {
+    "alan": "inveon.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Inveon"
+  },
+  {
+    "alan": "deloitte.com",
+    "mx_var": true,
+    "mx": [
+      "mx1.deloitte.iphmx.com",
+      "mx1.hc5291-32.iphmx.com",
+      "mx2.deloitte.iphmx.com",
+      "mx2.hc5291-32.iphmx.com"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Deloitte"
   }
 ]
