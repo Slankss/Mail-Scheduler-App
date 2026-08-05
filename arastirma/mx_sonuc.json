@@ -1091,5 +1091,133 @@
     "saglayici": "Microsoft 365",
     "not": "",
     "firma_adi": "Virgosol"
+  },
+  {
+    "alan": "shipday.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Shipday"
+  },
+  {
+    "alan": "verisoft.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Verisoft"
+  },
+  {
+    "alan": "finagotech.com.tr",
+    "mx_var": true,
+    "mx": [
+      "finagotech-com-tr.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Finago Tech"
+  },
+  {
+    "alan": "epigra.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Epigra"
+  },
+  {
+    "alan": "servicecore.app",
+    "mx_var": true,
+    "mx": [
+      "antispam1.ihs.com.tr",
+      "antispam2.ihs.com.tr"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "ServiceCore"
+  },
+  {
+    "alan": "meeapps.com.tr",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Mee Apps"
+  },
+  {
+    "alan": "paymore.com.tr",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Paymore"
+  },
+  {
+    "alan": "solvoyo.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "aspmx2.googlemail.com",
+      "aspmx3.googlemail.com",
+      "aspmx4.googlemail.com",
+      "aspmx5.googlemail.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Solvoyo"
+  },
+  {
+    "alan": "neova.com.tr",
+    "mx_var": true,
+    "mx": [
+      "mail1.neova.com.tr",
+      "mail2.neova.com.tr"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Neova"
+  },
+  {
+    "alan": "uyumsoft.com",
+    "mx_var": true,
+    "mx": [
+      "uyumsoft-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Uyumsoft (.com)"
   }
 ]
