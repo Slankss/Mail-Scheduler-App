@@ -1,6 +1,7 @@
 import math
 import os
 import smtplib
+import unicodedata
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -376,6 +377,72 @@ def send_now():
     return redirect(url_for("index"))
 
 
+EMAIL_HEADER_HINTS = ("mail", "e-posta", "eposta", "e posta", "email")
+# Onem sirasina gore denenir: "Firma Adi" gibi bir baslikta once "firma"
+# yakalanmali, gevsek olan "ad" ise en sona birakilmalidir.
+NAME_HEADER_HINTS = ("firma", "sirket", "company", "unvan", "name", "isim", "ad")
+
+
+def normalize_header(value):
+    """Sutun basligini karsilastirmaya hazirlar (Turkce harfler sadelesir).
+
+    'İletisim E-postasi' -> 'iletisim e-postasi'. Python'da 'İ'.lower() harfi
+    birlesik bir noktayla birakir, bu yuzden aksanlar ayiklanir; 'i' harfi de
+    ayrica esitlenir ki nokta/noktasiz farki eslesmeyi bozmasin.
+    """
+    text = unicodedata.normalize("NFKD", str(value).strip().lower())
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return text.replace("ı", "i")
+
+
+def cell_text(value):
+    """Hucreyi metne cevirir; bos hucreler 'nan' degil, bos string olur."""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return ""
+    text = str(value).strip()
+    return "" if text.lower() in ("nan", "nat", "none") else text
+
+
+def pick_email_column(df):
+    """Adreslerin bulundugu sutunu secer.
+
+    Once veriye bakilir: icinde en cok '@' gecen sutun kazanir. Sadece basliga
+    guvenmek yaniltir, cunku "Mail Sunucusu (MX)" gibi bir sutunun basligi
+    "mail" icerirken degerleri adres degildir, "Iletisim E-postasi" gibi gercek
+    bir adres sutunu ise "mail" kelimesini hic gecirmez. Hicbir sutunda adres
+    yoksa baslik ipuclarina dusulur; boylece bos bir sablon da anlamli bir hata
+    verir.
+
+    Returns: (secilen_sutun, gormezden_gelinen_diger_adaylar)
+    """
+    order = list(df.columns)
+    scored = []
+    for col in order:
+        hits = int(df[col].map(lambda v: "@" in cell_text(v)).sum())
+        if hits:
+            scored.append((hits, order.index(col), col))
+    if scored:
+        # Cok adresli sutun kazanir; esitlikte soldaki sutun tercih edilir.
+        scored.sort(key=lambda item: (-item[0], item[1]))
+        return scored[0][2], [col for _, _, col in scored[1:]]
+
+    for col in order:
+        if any(hint in normalize_header(col) for hint in EMAIL_HEADER_HINTS):
+            return col, []
+    return None, []
+
+
+def pick_name_column(df, exclude=None):
+    """Firma adi sutununu baslik ipuclarina gore secer."""
+    for hint in NAME_HEADER_HINTS:
+        for col in df.columns:
+            if col == exclude:
+                continue
+            if hint in normalize_header(col):
+                return col
+    return None
+
+
 @app.route("/import", methods=["GET", "POST"])
 def import_page():
     if request.method == "POST":
@@ -394,23 +461,25 @@ def import_page():
             flash(f"Excel okunamadi: {exc}", "danger")
             return redirect(url_for("import_page"))
 
-        columns = {c.lower().strip(): c for c in df.columns}
-
-        email_col = next((columns[c] for c in columns if "mail" in c), None)
-        name_col = next(
-            (columns[c] for c in columns if "name" in c or "isim" in c or "firma" in c or "ad" in c),
-            None,
-        )
+        email_col, other_email_cols = pick_email_column(df)
+        name_col = pick_name_column(df, exclude=email_col)
 
         if not email_col:
-            flash("Excel dosyasinda email sutunu bulunamadi.", "danger")
+            flash(
+                "Excel dosyasinda mail adresi iceren bir sutun bulunamadi. "
+                "Okunan sutunlar: " + ", ".join(str(c) for c in df.columns),
+                "danger",
+            )
             return redirect(url_for("import_page"))
 
         rows = []
         skipped = 0
         for _, row in df.iterrows():
-            name = str(row[name_col]).strip() if name_col else ""
-            raw = str(row[email_col]).strip()
+            name = cell_text(row[name_col]) if name_col else ""
+            raw = cell_text(row[email_col])
+            if not raw:
+                # Bos hucre bir hata degil, sessizce atlanir.
+                continue
 
             for email in raw.split(","):
                 email = email.strip()
@@ -421,11 +490,19 @@ def import_page():
 
         inserted = database.import_contacts(rows)
         duplicates = len(rows) - inserted
+        # Hangi sutunlarin kullanildigi yaziliyor: yanlis sutun secildiginde
+        # kullanici bunu sonuc mesajindan hemen gorebilmeli.
         msg = f"{inserted} kisi veritabanina eklendi."
+        msg += f" Mail sutunu: '{email_col}'."
+        msg += f" Firma sutunu: '{name_col}'." if name_col else " Firma sutunu bulunamadi."
+        if other_email_cols:
+            msg += " Adres iceren diger sutunlar kullanilmadi: " + ", ".join(
+                f"'{c}'" for c in other_email_cols
+            ) + "."
         if duplicates:
             msg += f" {duplicates} mail zaten kayitli oldugu icin eklenmedi."
         if skipped:
-            msg += f" {skipped} satirda gecerli mail bulunamadi, atlandi."
+            msg += f" {skipped} hucrede gecerli mail bulunamadi, atlandi."
         flash(msg, "success")
         return redirect(url_for("contacts_page"))
 
