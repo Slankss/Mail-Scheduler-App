@@ -1645,5 +1645,298 @@
     "saglayici": "",
     "not": "",
     "firma_adi": "Cerebrum Tech"
+  },
+  {
+    "alan": "gamelab.istanbul",
+    "mx_var": true,
+    "mx": [
+      "gamelab.istanbul"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Gamelab Istanbul"
+  },
+  {
+    "alan": "cyberistanbul.com",
+    "mx_var": true,
+    "mx": [
+      "cyberistanbul.com"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Cyber Istanbul"
+  },
+  {
+    "alan": "supergears.games",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "SuperGears Games"
+  },
+  {
+    "alan": "cyberwise.com.tr",
+    "mx_var": true,
+    "mx": [
+      "cyberwise-com-tr.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Cyberwise"
+  },
+  {
+    "alan": "makrops.com",
+    "mx_var": true,
+    "mx": [
+      "smtp.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Makrops"
+  },
+  {
+    "alan": "wdtajans.com",
+    "mx_var": true,
+    "mx": [
+      "mx-01.kurumsaleposta.com",
+      "mx-02.kurumsaleposta.com"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "WDT Ajans"
+  },
+  {
+    "alan": "kreativty.com",
+    "mx_var": true,
+    "mx": [
+      "mail.kreativty.com"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Kreativty"
+  },
+  {
+    "alan": "onexyazilim.com",
+    "mx_var": true,
+    "mx": [
+      "mx01.onexyazilim.com"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Onex Yazılım"
+  },
+  {
+    "alan": "zomotech.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Zomotech"
+  },
+  {
+    "alan": "appfellas.dev",
+    "mx_var": true,
+    "mx": [
+      "_dc-mx.3321cd304281.appfellas.dev"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Appfellas"
+  },
+  {
+    "alan": "medyacode.com",
+    "mx_var": true,
+    "mx": [
+      "mx1.hostinger.com",
+      "mx2.hostinger.com"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "MedyaCode"
+  },
+  {
+    "alan": "myfcyazilim.com",
+    "mx_var": true,
+    "mx": [
+      "mx.yandex.net"
+    ],
+    "saglayici": "Yandex",
+    "not": "",
+    "firma_adi": "MyFC Yazılım"
+  },
+  {
+    "alan": "renklikare.com",
+    "mx_var": true,
+    "mx": [
+      "_dc-mx.43300595cf22.renklikare.com",
+      "antispam1.ihs.com.tr",
+      "antispam2.ihs.com.tr"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Renkli Kare"
+  },
+  {
+    "alan": "webtasarimsistemleri.com",
+    "mx_var": true,
+    "mx": [
+      "SMTP.GOOGLE.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Web Tasarım Sistemleri"
+  },
+  {
+    "alan": "internative.net",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Internative"
+  },
+  {
+    "alan": "mobiluygulamagelistirme.tr",
+    "mx_var": true,
+    "mx": [
+      "mobiluygulamagelistirme.tr"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "SM Yazılım"
+  },
+  {
+    "alan": "goodjobgames.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "aspmx2.googlemail.com",
+      "aspmx3.googlemail.com",
+      "ms14189243.msv1.invalid"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Good Job Games"
+  },
+  {
+    "alan": "yamystudio.com",
+    "mx_var": true,
+    "mx": [
+      "smtp.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "YAMY Studio"
+  },
+  {
+    "alan": "uitsec.com",
+    "mx_var": true,
+    "mx": [
+      "uitsec-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "UITSEC"
+  },
+  {
+    "alan": "lostar.com.tr",
+    "mx_var": true,
+    "mx": [
+      "lostar-com-tr.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Lostar Bilgi Güvenliği"
+  },
+  {
+    "alan": "teknorion.com",
+    "mx_var": true,
+    "mx": [
+      "mx-01.kurumsaleposta.com",
+      "mx-02.kurumsaleposta.com"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Teknorion"
+  },
+  {
+    "alan": "istcode.com",
+    "mx_var": true,
+    "mx": [
+      "mx-mail.dh.web.tr",
+      "mx2-mail.dh.web.tr"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Istcode"
+  },
+  {
+    "alan": "uniesoft.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "UnieSoft"
+  },
+  {
+    "alan": "naviservo.com",
+    "mx_var": true,
+    "mx": [
+      "mx-in05.natrohost.com",
+      "mx-in05b.natrohost.com"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Naviservo"
+  },
+  {
+    "alan": "smartes.com.tr",
+    "mx_var": true,
+    "mx": [
+      "ASPMX.L.GOOGLE.COM",
+      "ALT1.ASPMX.L.GOOGLE.COM",
+      "ALT2.ASPMX.L.GOOGLE.COM",
+      "ALT3.ASPMX.L.GOOGLE.COM",
+      "ALT4.ASPMX.L.GOOGLE.COM",
+      "mail.smartes.com.tr"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Smartes Teknoloji"
+  },
+  {
+    "alan": "catchprobe.com",
+    "mx_var": true,
+    "mx": [
+      "catchprobe-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "CatchProbe (Intel Probe)"
   }
 ]
