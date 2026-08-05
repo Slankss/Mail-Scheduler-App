@@ -57,13 +57,27 @@
         <h5 class="card-title">Otomatik Gonderim</h5>
         <p>
             Durum:
-            {% if running %}
-                <span class="badge bg-success">Calisiyor</span>
-            {% else %}
-                <span class="badge bg-secondary">Durduruldu</span>
-            {% endif %}
+            <span id="status-badge" class="badge {% if running %}bg-success{% else %}bg-secondary{% endif %}">
+                {% if running %}Calisiyor{% else %}Durduruldu{% endif %}
+            </span>
         </p>
-        <p>Her <strong>{{ settings.interval_minutes }}</strong> dakikada bir, en fazla <strong>{{ settings.batch_size }}</strong> kisiye mail gonderilecek.</p>
+        <p>Her <strong>{{ settings.interval_minutes }}</strong> dakikada bir, en fazla <strong>{{ settings.batch_size }}</strong> kisiye mail gonderilecek.
+        {% if progress.daily_limit %}
+            Gunluk limit <strong>{{ progress.daily_limit }}</strong> mail; limit dolunca gonderim kendiliginden durur.
+        {% endif %}
+        </p>
+
+        {# Gunluk limit dolunca gonderim otomatik durur; nedeni burada gorunur. #}
+        <div id="stop-reason" class="alert alert-warning py-2 {% if not progress.stop_reason %}d-none{% endif %}">
+            {{ progress.stop_reason or '' }}
+        </div>
+
+        {% if progress.daily_limit %}
+        <p class="small text-muted" id="daily-usage">
+            Bugun gonderilen: {{ progress.sent_today }} / {{ progress.daily_limit }}
+            (kalan {{ progress.daily_remaining }})
+        </p>
+        {% endif %}
 
         <div id="progress-wrap" class="mb-3">
             <div class="progress" style="height: 24px;">
@@ -88,10 +102,10 @@
         </div>
 
         <form method="post" action="{{ url_for('start') }}" class="d-inline">
-            <button type="submit" class="btn btn-success" {% if running %}disabled{% endif %}>Baslat</button>
+            <button type="submit" id="btn-start" class="btn btn-success" {% if running %}disabled{% endif %}>Baslat</button>
         </form>
         <form method="post" action="{{ url_for('stop') }}" class="d-inline">
-            <button type="submit" class="btn btn-danger" {% if not running %}disabled{% endif %}>Durdur</button>
+            <button type="submit" id="btn-stop" class="btn btn-danger" {% if not running %}disabled{% endif %}>Durdur</button>
         </form>
         <form method="post" action="{{ url_for('send_now') }}" class="d-inline">
             <button type="submit" class="btn btn-primary">Simdi Gonder (1 paket)</button>
@@ -338,6 +352,25 @@ async function refreshProgress() {
             p.started_at ? 'Baslangic: ' + fmt(p.started_at) : '';
         document.getElementById('progress-eta').textContent =
             p.eta ? 'Tahmini bitis: ' + fmt(p.eta) : 'Tum mailler islendi';
+
+        // Gonderim gunluk limit dolunca kendiliginden durabilir; sayfayi
+        // yenilemeden durum rozeti, dugmeler ve durma nedeni guncellenir.
+        const badge = document.getElementById('status-badge');
+        badge.textContent = p.running ? 'Calisiyor' : 'Durduruldu';
+        badge.classList.toggle('bg-success', p.running);
+        badge.classList.toggle('bg-secondary', !p.running);
+        document.getElementById('btn-start').disabled = p.running;
+        document.getElementById('btn-stop').disabled = !p.running;
+
+        const reason = document.getElementById('stop-reason');
+        reason.textContent = p.stop_reason || '';
+        reason.classList.toggle('d-none', !p.stop_reason);
+
+        const usage = document.getElementById('daily-usage');
+        if (usage && p.daily_limit) {
+            usage.textContent = 'Bugun gonderilen: ' + p.sent_today + ' / ' + p.daily_limit +
+                ' (kalan ' + p.daily_remaining + ')';
+        }
     } catch (e) { /* yoksay */ }
 }
 setInterval(refreshProgress, 3000);

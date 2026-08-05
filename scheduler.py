@@ -13,8 +13,27 @@ SCHEDULE_JOB_PREFIX = "scheduled_start_"
 # planlanmis bir gonderim, aciliste habersizce baslamamalidir.
 MISFIRE_GRACE = timedelta(hours=1)
 
-plascheduler = BackgroundScheduler()
+scheduler = BackgroundScheduler()
 scheduler.start()
+
+
+def daily_limit_reached(settings=None):
+    """Bugun gunluk limite ulasildi mi?
+
+    Limit 0 (ya da bos) ise sinir yoktur ve hicbir zaman True donmez.
+    """
+    settings = database.get_settings() if settings is None else settings
+    daily_limit = (settings["daily_limit"] or 0) if settings else 0
+    if daily_limit <= 0:
+        return False
+    return database.count_sent_today() >= daily_limit
+
+
+def _limit_reason(settings):
+    return (
+        f"Gunluk limit ({settings['daily_limit']} mail) doldugu icin "
+        "otomatik gonderim durduruldu."
+    )
 
 
 def send_batch():
@@ -30,7 +49,10 @@ def send_batch():
     if daily_limit > 0:
         remaining = daily_limit - database.count_sent_today()
         if remaining <= 0:
-            return  # gunluk limit doldu, bugun artik gondermeyiz
+            # Gunluk limit doldu: bu turu atlamak yetmez, gonderim tamamen
+            # durdurulur ve "baslatilmis" durumdan cikilir.
+            stop(_limit_reason(settings))
+            return
         batch_size = min(batch_size, remaining)
 
     attachments = [a["path"] for a in database.get_attachments()]
@@ -50,6 +72,11 @@ def send_batch():
         except Exception:
             database.mark_contact_failed(contact["id"])
 
+    # Bu paketle limit dolduysa bir sonraki turu beklemeden hemen duruyoruz;
+    # boylece arayuz de gonderimi "durduruldu" olarak gosterir.
+    if daily_limit > 0 and database.count_sent_today() >= daily_limit:
+        stop(_limit_reason(settings))
+
 
 def start():
     settings = database.get_settings()
@@ -62,10 +89,10 @@ def start():
     database.set_scheduler_active(True)
 
 
-def stop():
+def stop(reason: str = None):
     if scheduler.get_job(JOB_ID):
         scheduler.remove_job(JOB_ID)
-    database.set_scheduler_active(False)
+    database.set_scheduler_active(False, reason)
 
 
 def is_running():
@@ -82,6 +109,12 @@ def _fire_schedule(schedule_id):
     if not settings["smtp_email"] or not settings["smtp_password"]:
         database.set_schedule_status(
             schedule_id, "failed", "Mail ayarlari eksik oldugu icin baslatilamadi."
+        )
+        return
+    if daily_limit_reached(settings):
+        # Limit zaten dolu: baslatip ilk turda durdurmak yerine hic baslatmiyoruz.
+        database.set_schedule_status(
+            schedule_id, "failed", _limit_reason(settings)
         )
         return
     start()
