@@ -1318,5 +1318,332 @@
     "saglayici": "",
     "not": "",
     "firma_adi": "Deloitte"
+  },
+  {
+    "alan": "obase.com",
+    "mx_var": true,
+    "mx": [
+      "primary.us.email.fireeyecloud.com",
+      "alt1.us.email.fireeyecloud.com",
+      "alt2.us.email.fireeyecloud.com",
+      "alt3.us.email.fireeyecloud.com"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Obase"
+  },
+  {
+    "alan": "pisano.com",
+    "mx_var": true,
+    "mx": [
+      "pisano-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Pisano"
+  },
+  {
+    "alan": "dgpays.com",
+    "mx_var": true,
+    "mx": [
+      "mail0.dgpays.com"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "DgPays"
+  },
+  {
+    "alan": "token.com.tr",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Token Finansal Teknolojiler"
+  },
+  {
+    "alan": "fineksus.com",
+    "mx_var": true,
+    "mx": [
+      "fineksus-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Fineksus"
+  },
+  {
+    "alan": "intellica.net",
+    "mx_var": true,
+    "mx": [
+      "intellica-net.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Intellica"
+  },
+  {
+    "alan": "sestek.com",
+    "mx_var": true,
+    "mx": [
+      "sestek-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Sestek"
+  },
+  {
+    "alan": "kloia.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Kloia"
+  },
+  {
+    "alan": "sufle.io",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Sufle"
+  },
+  {
+    "alan": "enuygun.com",
+    "mx_var": true,
+    "mx": [
+      "ASPMX.L.GOOGLE.com",
+      "ALT1.ASPMX.L.GOOGLE.com",
+      "ALT2.ASPMX.L.GOOGLE.com",
+      "ALT3.ASPMX.L.GOOGLE.com",
+      "ALT4.ASPMX.L.GOOGLE.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Enuygun"
+  },
+  {
+    "alan": "obilet.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Obilet"
+  },
+  {
+    "alan": "sikayetvar.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "aspmx2.googlemail.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Şikayetvar"
+  },
+  {
+    "alan": "garantiteknoloji.com.tr",
+    "mx_var": true,
+    "mx": [
+      "smtp4.garanti.com.tr",
+      "smtp5.garanti.com.tr",
+      "smtp6.garanti.com.tr",
+      "smtp7.garanti.com.tr",
+      "smtp8.garanti.com.tr"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Garanti BBVA Teknoloji"
+  },
+  {
+    "alan": "ykteknoloji.com.tr",
+    "mx_var": true,
+    "mx": [
+      "ykbmx1.yapikredi.com.tr",
+      "ykbmx2.yapikredi.com.tr",
+      "ykbmx3.yapikredi.com.tr"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Yapı Kredi Teknoloji"
+  },
+  {
+    "alan": "ziraatteknoloji.com",
+    "mx_var": true,
+    "mx": [
+      "smtp.ziraatteknoloji.com"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Ziraat Teknoloji"
+  },
+  {
+    "alan": "abh.com.tr",
+    "mx_var": true,
+    "mx": [
+      "abh-com-tr.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Anadolu Bilişim (ABH)"
+  },
+  {
+    "alan": "isbak.istanbul",
+    "mx_var": true,
+    "mx": [
+      "mail.verimerkezi.istanbul",
+      "mail1.verimerkezi.istanbul"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "İSBAK"
+  },
+  {
+    "alan": "baykartech.com",
+    "mx_var": true,
+    "mx": [
+      "mx.uzmanposta.com"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Baykar"
+  },
+  {
+    "alan": "sempeak.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Sempeak"
+  },
+  {
+    "alan": "asseco-see.com",
+    "mx_var": true,
+    "mx": [
+      "asseco.in.tmes.trendmicro.eu"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Asseco SEE Türkiye"
+  },
+  {
+    "alan": "bilgeadamteknoloji.com",
+    "mx_var": true,
+    "mx": [
+      "mxa.mailgun.org",
+      "mxb.mailgun.org"
+    ],
+    "saglayici": "Mailgun",
+    "not": "",
+    "firma_adi": "BilgeAdam Teknoloji"
+  },
+  {
+    "alan": "vbt.com.tr",
+    "mx_var": true,
+    "mx": [
+      "vbt-com-tr.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "VBT Yazılım"
+  },
+  {
+    "alan": "odeal.com",
+    "mx_var": true,
+    "mx": [
+      "mail.odeal.com"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Ödeal"
+  },
+  {
+    "alan": "moka.com",
+    "mx_var": true,
+    "mx": [
+      "mokaunited-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Moka United"
+  },
+  {
+    "alan": "hepsipay.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "aspmx2.googlemail.com",
+      "aspmx3.googlemail.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Hepsipay"
+  },
+  {
+    "alan": "tosla.com",
+    "mx_var": true,
+    "mx": [
+      "mail01.akbank.com",
+      "mail02.akbank.com",
+      "mail03.akbank.com",
+      "mail04.akbank.com",
+      "mail05.akbank.com",
+      "mail06.akbank.com"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Tosla"
+  },
+  {
+    "alan": "peakup.org",
+    "mx_var": true,
+    "mx": [
+      "peakup-org.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "PeakUp"
+  },
+  {
+    "alan": "cerebrumtech.com",
+    "mx_var": true,
+    "mx": [
+      ""
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Cerebrum Tech"
   }
 ]
