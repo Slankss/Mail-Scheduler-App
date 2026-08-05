@@ -41,7 +41,7 @@ VARSAYILAN_CIKTI = os.path.join(os.path.dirname(KOK), "istanbul_yazilim_sirketle
 
 BASLIKLAR = [
     "Firma Adı", "Web Sitesi", "İletişim E-postası", "İK / Kariyer E-postası",
-    "Sektör / Faaliyet Alanı", "Kaynak", "Doğrulama",
+    "Sektör / Faaliyet Alanı", "Kaynak", "Doğrulama", "Mail Sunucusu (MX)",
 ]
 
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
@@ -79,7 +79,9 @@ KISISEL_RE = re.compile(r"^[a-zçğıöşü]+[._\-][a-zçğıöşü]+$", re.IGNO
 
 COK_PARCALI_TLD = {
     "com.tr", "net.tr", "org.tr", "gov.tr", "edu.tr", "bel.tr", "web.tr", "gen.tr", "av.tr",
-    "co.uk", "org.uk", "com.au", "co.jp", "com.br",
+    "co.uk", "org.uk", "ac.uk", "com.au", "net.au", "co.jp", "com.br", "com.mx",
+    "co.in", "net.in", "org.in", "co.za", "co.nz", "com.sg", "com.my", "co.id",
+    "com.ua", "co.il", "com.cn", "com.hk", "com.ru", "com.pl", "com.ar",
 }
 
 
@@ -276,6 +278,7 @@ def xlsx_yaz(satirlar: list[dict], cikti: str) -> None:
             s.get("sektor", ""),
             s.get("kaynak", ""),
             s.get("dogrulama", ""),
+            s.get("mx", ""),
         ])
 
     for satir in ws.iter_rows(min_row=2):
@@ -286,11 +289,13 @@ def xlsx_yaz(satirlar: list[dict], cikti: str) -> None:
         if "üretildi" in str(satir[6].value or ""):
             satir[3].font = uyari_font
             satir[6].font = uyari_font
+        if "MX YOK" in str(satir[7].value or ""):
+            satir[7].font = uyari_font
 
-    for i, genislik in enumerate([34, 34, 30, 46, 34, 34, 30], start=1):
+    for i, genislik in enumerate([34, 34, 30, 46, 34, 34, 30, 22], start=1):
         ws.column_dimensions[get_column_letter(i)].width = genislik
     ws.freeze_panes = "A2"
-    ws.auto_filter.ref = f"A1:G{ws.max_row}"
+    ws.auto_filter.ref = f"A1:H{ws.max_row}"
 
     # Açıklama sayfası
     ws2 = wb.create_sheet("OKUBENI")
@@ -420,16 +425,34 @@ def main() -> int:
     for k, v in islenmis.items():
         nihai[k] = v
 
+    # MX kontrolü sonuçları (arastirma/mx_kontrol.py çıktısı) varsa birleştir
+    mx_yolu = os.path.join(KOK, "mx_sonuc.json")
+    mx_harita: dict[str, str] = {}
+    if os.path.exists(mx_yolu):
+        with open(mx_yolu, encoding="utf-8") as f:
+            for r in json.load(f):
+                if r["mx_var"] is True:
+                    mx_harita[r["alan"]] = r.get("saglayici") or "var"
+                elif r["mx_var"] is False:
+                    mx_harita[r["alan"]] = f"MX YOK ({r['not']})"
+                else:
+                    mx_harita[r["alan"]] = "sorgulanamadı"
+
     # Doğrulama etiketi + istenirse İK varyantı üretimi
     for v in nihai.values():
+        v["mx"] = mx_harita.get(kayitli_alan(site_hostu(v.get("web_sitesi", ""))), "")
         dogrulanmis = bool(v.get("eposta") or v.get("ik_eposta"))
         v["dogrulama"] = "siteden doğrulandı" if dogrulanmis else "doğrulanmadı"
         if a.varyant_uret and not v.get("ik_eposta"):
             uretilen = varyant_uret(v.get("web_sitesi", ""))
             if uretilen:
                 v["ik_eposta"] = uretilen
-                v["dogrulama"] = ("genel adres doğrulandı · İK üretildi" if v.get("eposta")
-                                  else "üretildi – doğrulanmadı")
+                if "MX YOK" in v.get("mx", ""):
+                    v["dogrulama"] = "üretildi – MX YOK, kesin bounce eder"
+                elif v.get("eposta"):
+                    v["dogrulama"] = "genel adres doğrulandı · İK üretildi"
+                else:
+                    v["dogrulama"] = "üretildi – doğrulanmadı"
 
     xlsx_yaz(list(nihai.values()), a.cikti)
     dolu = sum(1 for v in nihai.values() if v.get("eposta"))

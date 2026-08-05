@@ -1,0 +1,1095 @@
+[
+  {
+    "alan": "useinsider.com",
+    "mx_var": true,
+    "mx": [
+      "primary.emea.email.fireeyecloud.com",
+      "alt1.emea.email.fireeyecloud.com",
+      "alt2.emea.email.fireeyecloud.com",
+      "alt3.emea.email.fireeyecloud.com"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Insider"
+  },
+  {
+    "alan": "getir.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "aspmx2.googlemail.com",
+      "aspmx3.googlemail.com",
+      "inbound-smtp.eu-west-1.amazonaws.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Getir"
+  },
+  {
+    "alan": "trendyol.com",
+    "mx_var": true,
+    "mx": [
+      "cluster5.eu.messagelabs.com",
+      "cluster5a.eu.messagelabs.com"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Trendyol"
+  },
+  {
+    "alan": "hepsiburada.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Hepsiburada"
+  },
+  {
+    "alan": "yemeksepeti.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Yemeksepeti"
+  },
+  {
+    "alan": "sahibinden.com",
+    "mx_var": true,
+    "mx": [
+      "sahibinden-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Sahibinden.com"
+  },
+  {
+    "alan": "kariyer.net",
+    "mx_var": true,
+    "mx": [
+      "kariyer-net.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Kariyer.net"
+  },
+  {
+    "alan": "armut.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "aspmx2.googlemail.com",
+      "aspmx3.googlemail.com",
+      "ms49492243.msv1.invalid"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Armut"
+  },
+  {
+    "alan": "modanisa.com",
+    "mx_var": true,
+    "mx": [
+      "ASPMX.L.GOOGLE.com",
+      "ALT1.ASPMX.L.GOOGLE.com",
+      "ALT2.ASPMX.L.GOOGLE.com",
+      "ALT3.ASPMX.L.GOOGLE.com",
+      "ALT4.ASPMX.L.GOOGLE.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Modanisa"
+  },
+  {
+    "alan": "bitaksi.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "BiTaksi"
+  },
+  {
+    "alan": "marti.tech",
+    "mx_var": true,
+    "mx": [
+      "marti-tech.mail.cloud.nospamproxy.com"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Martı"
+  },
+  {
+    "alan": "peak.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "aspmx2.googlemail.com",
+      "aspmx3.googlemail.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Peak Games"
+  },
+  {
+    "alan": "dreamgames.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Dream Games"
+  },
+  {
+    "alan": "rollicgames.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "aspmx2.googlemail.com",
+      "aspmx3.googlemail.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Rollic Games"
+  },
+  {
+    "alan": "spykegames.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Spyke Games"
+  },
+  {
+    "alan": "gramgames.com",
+    "mx_var": false,
+    "mx": [],
+    "saglayici": "",
+    "not": "MX kaydı yok",
+    "firma_adi": "Gram Games"
+  },
+  {
+    "alan": "codeway.co",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "smtp.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com",
+      "ms48223402.msv1.invalid",
+      "ms86555454.msv1.invalid",
+      "ms94011582.msv1.invalid"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Codeway"
+  },
+  {
+    "alan": "softtech.com.tr",
+    "mx_var": true,
+    "mx": [
+      "st.softtech.com.tr"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Softtech"
+  },
+  {
+    "alan": "intertech.com.tr",
+    "mx_var": true,
+    "mx": [
+      "mail1.intertech.com.tr",
+      "mail2.intertech.com.tr",
+      "mail6.intertech.com.tr",
+      "mail7.intertech.com.tr"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Intertech"
+  },
+  {
+    "alan": "innova.com.tr",
+    "mx_var": true,
+    "mx": [
+      "mail.innova.com.tr",
+      "mail2.innova.com.tr"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Innova Bilişim"
+  },
+  {
+    "alan": "kocsistem.com.tr",
+    "mx_var": true,
+    "mx": [
+      "mailsec.kocsistem.com.tr",
+      "mailsec2.kocsistem.com.tr",
+      "mailsec3.kocsistem.com.tr"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "KoçSistem"
+  },
+  {
+    "alan": "sabancidx.com",
+    "mx_var": true,
+    "mx": [
+      "smtp3.sabancidx.com",
+      "smtp.sabancidx.com",
+      "smtp2.sabancidx.com",
+      "smtp.bimsa.com.tr",
+      "smtpizmit.bimsa.com.tr"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Sabancı DX"
+  },
+  {
+    "alan": "d-teknoloji.com.tr",
+    "mx_var": true,
+    "mx": [
+      "dteknoloji-com-tr0c.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Doğuş Teknoloji"
+  },
+  {
+    "alan": "netas.com.tr",
+    "mx_var": true,
+    "mx": [
+      "netas-com-tr.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Netaş"
+  },
+  {
+    "alan": "etiya.com",
+    "mx_var": true,
+    "mx": [
+      "etiya-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Etiya"
+  },
+  {
+    "alan": "veripark.com",
+    "mx_var": true,
+    "mx": [
+      "veripark-com.mail.protection.outlook.com",
+      "mail.veripark.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "VeriPark"
+  },
+  {
+    "alan": "obss.tech",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "OBSS"
+  },
+  {
+    "alan": "commencis.com",
+    "mx_var": true,
+    "mx": [
+      "commencis-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Commencis"
+  },
+  {
+    "alan": "mobven.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "aspmx2.googlemail.com",
+      "aspmx3.googlemail.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Mobven"
+  },
+  {
+    "alan": "appcent.mobi",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Appcent"
+  },
+  {
+    "alan": "testinium.com",
+    "mx_var": true,
+    "mx": [
+      "testinium-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Testinium"
+  },
+  {
+    "alan": "krontech.com",
+    "mx_var": true,
+    "mx": [
+      "krontech-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Kron Technologies"
+  },
+  {
+    "alan": "berqnet.com",
+    "mx_var": true,
+    "mx": [
+      "smtp.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Berqnet"
+  },
+  {
+    "alan": "vispera.co",
+    "mx_var": true,
+    "mx": [
+      "vispera-co.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Vispera"
+  },
+  {
+    "alan": "segmentify.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "aspmx2.googlemail.com",
+      "aspmx3.googlemail.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Segmentify"
+  },
+  {
+    "alan": "relateddigital.com",
+    "mx_var": true,
+    "mx": [
+      "relateddigital-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Related Digital"
+  },
+  {
+    "alan": "setrow.com",
+    "mx_var": true,
+    "mx": [
+      "setrow-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Setrow"
+  },
+  {
+    "alan": "akinon.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Akinon"
+  },
+  {
+    "alan": "ticimax.com",
+    "mx_var": true,
+    "mx": [
+      "ticimax-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Ticimax"
+  },
+  {
+    "alan": "ideasoft.com.tr",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "IdeaSoft"
+  },
+  {
+    "alan": "tsoft.com.tr",
+    "mx_var": true,
+    "mx": [
+      "mail.tsoft.com.tr"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "T-Soft"
+  },
+  {
+    "alan": "nebim.com.tr",
+    "mx_var": true,
+    "mx": [
+      "ASPMX.L.GOOGLE.COM",
+      "ALT1.ASPMX.L.GOOGLE.COM",
+      "ALT2.ASPMX.L.GOOGLE.COM",
+      "ALT3.ASPMX.L.GOOGLE.COM",
+      "ALT4.ASPMX.L.GOOGLE.COM"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Nebim"
+  },
+  {
+    "alan": "mikro.com.tr",
+    "mx_var": true,
+    "mx": [
+      "mxa-0078e201.gslb.pphosted.com",
+      "mxb-0078e201.gslb.pphosted.com"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Mikro Yazılım"
+  },
+  {
+    "alan": "uyumsoft.com.tr",
+    "mx_var": true,
+    "mx": [
+      "uyumsoft-com-tr.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Uyumsoft"
+  },
+  {
+    "alan": "izibiz.com.tr",
+    "mx_var": true,
+    "mx": [
+      "izibiz-com-tr.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "İzibiz"
+  },
+  {
+    "alan": "digitalplanet.com.tr",
+    "mx_var": true,
+    "mx": [
+      "digitalplanet-com-tr.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Digital Planet"
+  },
+  {
+    "alan": "detaysoft.com",
+    "mx_var": true,
+    "mx": [
+      "mail.detaysoft.com"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Detaysoft"
+  },
+  {
+    "alan": "experteam.com.tr",
+    "mx_var": true,
+    "mx": [
+      "experteam-com-tr.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Experteam"
+  },
+  {
+    "alan": "workcube.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Workcube"
+  },
+  {
+    "alan": "caniaserp.com",
+    "mx_var": true,
+    "mx": [
+      "mailgw01.iastechnologies.com"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "IAS - Canias ERP"
+  },
+  {
+    "alan": "protel.com.tr",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Protel"
+  },
+  {
+    "alan": "platinbilisim.com.tr",
+    "mx_var": true,
+    "mx": [
+      "platinbilisim-com-tr.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Platin Bilişim"
+  },
+  {
+    "alan": "sistas.com.tr",
+    "mx_var": true,
+    "mx": [
+      "mail.sistas.com.tr"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Sistaş"
+  },
+  {
+    "alan": "linkbilgisayar.com.tr",
+    "mx_var": true,
+    "mx": [
+      "linkbilgisayar-com-tr.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Link Bilgisayar"
+  },
+  {
+    "alan": "cpm.com.tr",
+    "mx_var": true,
+    "mx": [
+      "cpm-com-tr.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "CPM Yazılım"
+  },
+  {
+    "alan": "iyzico.com",
+    "mx_var": true,
+    "mx": [
+      "iyzico-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "iyzico"
+  },
+  {
+    "alan": "param.com.tr",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Param"
+  },
+  {
+    "alan": "papara.com",
+    "mx_var": true,
+    "mx": [
+      "papara-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Papara"
+  },
+  {
+    "alan": "ininal.com",
+    "mx_var": true,
+    "mx": [
+      "ininal-com.mail.eo.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "ininal"
+  },
+  {
+    "alan": "sipay.com.tr",
+    "mx_var": true,
+    "mx": [
+      "sipay-com-tr.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Sipay"
+  },
+  {
+    "alan": "craftgate.io",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Craftgate"
+  },
+  {
+    "alan": "paycore.com",
+    "mx_var": true,
+    "mx": [
+      "paycore-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "PayCore"
+  },
+  {
+    "alan": "colendi.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.googlemail.com",
+      "alt4.aspmx.l.googlemail.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Colendi"
+  },
+  {
+    "alan": "getmidas.com",
+    "mx_var": true,
+    "mx": [
+      "mxa-00a7b401.gslb.pphosted.com",
+      "mxb-00a7b401.gslb.pphosted.com"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Midas"
+  },
+  {
+    "alan": "figopara.com",
+    "mx_var": true,
+    "mx": [
+      "figopara-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Figopara"
+  },
+  {
+    "alan": "paribu.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Paribu"
+  },
+  {
+    "alan": "btcturk.com",
+    "mx_var": true,
+    "mx": [
+      "mx1.btcturk.com",
+      "mx2.btcturk.com"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "BtcTurk"
+  },
+  {
+    "alan": "bitexen.com",
+    "mx_var": true,
+    "mx": [
+      "bitexen-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Bitexen"
+  },
+  {
+    "alan": "mobiroller.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "aspmx2.googlemail.com",
+      "aspmx3.googlemail.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Mobiroller"
+  },
+  {
+    "alan": "atptech.com",
+    "mx_var": true,
+    "mx": [
+      "mailgw1.tradesoft.com.tr"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "ATP Teknoloji"
+  },
+  {
+    "alan": "crssoft.com",
+    "mx_var": true,
+    "mx": [
+      "crssoft-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "CRS Soft"
+  },
+  {
+    "alan": "lyrebirdstudio.net",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Lyrebird Studio"
+  },
+  {
+    "alan": "bluearf.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Blue Arf"
+  },
+  {
+    "alan": "rentcarla.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "aspmx2.googlemail.com",
+      "aspmx3.googlemail.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Rentcarla"
+  },
+  {
+    "alan": "bimser.com",
+    "mx_var": true,
+    "mx": [
+      "bimser-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Bimser Çözüm"
+  },
+  {
+    "alan": "sevenapps.co",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Seven Apps"
+  },
+  {
+    "alan": "codevo.com.tr",
+    "mx_var": true,
+    "mx": [
+      "codevo-com-tr.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Codevo"
+  },
+  {
+    "alan": "chippin.com",
+    "mx_var": true,
+    "mx": [
+      "mx1.chippin.com.tr",
+      "mx2.chippin.com.tr",
+      "mx3.chippin.com.tr"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Chippin"
+  },
+  {
+    "alan": "monodijital.com",
+    "mx_var": true,
+    "mx": [
+      "mx.yandex.net"
+    ],
+    "saglayici": "Yandex",
+    "not": "",
+    "firma_adi": "Mono Dijital"
+  },
+  {
+    "alan": "neonapps.co",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Neon Apps"
+  },
+  {
+    "alan": "tankx.co",
+    "mx_var": true,
+    "mx": [
+      "ASPMX.L.GOOGLE.COM",
+      "ALT1.ASPMX.L.GOOGLE.COM",
+      "ALT2.ASPMX.L.GOOGLE.COM",
+      "ALT3.ASPMX.L.GOOGLE.COM",
+      "ALT4.ASPMX.L.GOOGLE.COM"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "TankX"
+  },
+  {
+    "alan": "dijitalkurye.com.tr",
+    "mx_var": true,
+    "mx": [
+      "dijitalkurye-com-tr.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Dijital Kurye"
+  },
+  {
+    "alan": "slayz.app",
+    "mx_var": true,
+    "mx": [
+      "slayz-app.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Slayz"
+  },
+  {
+    "alan": "ngaming.com",
+    "mx_var": true,
+    "mx": [
+      "ngaming-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "NGaming"
+  },
+  {
+    "alan": "nativeminds.ai",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Native Minds"
+  },
+  {
+    "alan": "oak.technology",
+    "mx_var": true,
+    "mx": [
+      "mail.oak.technology"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "Oak Technology"
+  },
+  {
+    "alan": "hirefeed.co.in",
+    "mx_var": true,
+    "mx": [
+      "mx1.hostinger.in",
+      "mx2.hostinger.in"
+    ],
+    "saglayici": "",
+    "not": "",
+    "firma_adi": "HireFeed"
+  },
+  {
+    "alan": "loodos.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "aspmx2.googlemail.com",
+      "aspmx3.googlemail.com",
+      "aspmx4.googlemail.com",
+      "aspmx5.googlemail.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Loodos"
+  },
+  {
+    "alan": "voltlines.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "aspmx2.googlemail.com",
+      "aspmx3.googlemail.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "VoltLines"
+  },
+  {
+    "alan": "avdcg.com",
+    "mx_var": true,
+    "mx": [
+      "avdcg-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "AVDCG"
+  },
+  {
+    "alan": "gridstudio.ai",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Grid Studio"
+  },
+  {
+    "alan": "playablefactory.com",
+    "mx_var": true,
+    "mx": [
+      "aspmx.l.google.com",
+      "alt1.aspmx.l.google.com",
+      "alt2.aspmx.l.google.com",
+      "alt3.aspmx.l.google.com",
+      "alt4.aspmx.l.google.com"
+    ],
+    "saglayici": "Google Workspace",
+    "not": "",
+    "firma_adi": "Playable Factory"
+  },
+  {
+    "alan": "virgosol.com",
+    "mx_var": true,
+    "mx": [
+      "virgosol-com.mail.protection.outlook.com"
+    ],
+    "saglayici": "Microsoft 365",
+    "not": "",
+    "firma_adi": "Virgosol"
+  }
+]
