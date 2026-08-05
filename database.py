@@ -67,6 +67,10 @@ def init_db():
         conn.execute("ALTER TABLE settings ADD COLUMN scheduler_started_at TEXT")
     if "daily_limit" not in cols:
         conn.execute("ALTER TABLE settings ADD COLUMN daily_limit INTEGER DEFAULT 0")
+    if "stop_reason" not in cols:
+        # Gonderim kendiliginden durdugunda (ornegin gunluk limit dolunca)
+        # nedeni burada tutulur; kullanici arayuzde neden durdugunu gorur.
+        conn.execute("ALTER TABLE settings ADD COLUMN stop_reason TEXT")
     contact_cols = {row["name"] for row in conn.execute("PRAGMA table_info(contacts)")}
     if "enabled" not in contact_cols:
         conn.execute(
@@ -117,15 +121,25 @@ def save_settings(data):
     conn.close()
 
 
-def set_scheduler_active(active: bool):
+def set_scheduler_active(active: bool, reason: str = None):
+    """Gonderimin calisir/durmus durumunu kaydeder.
+
+    `reason` sadece durdururken anlamlidir: gonderim kendiliginden durduysa
+    (gunluk limit dolunca) nedeni saklanir. Baslatirken her zaman temizlenir,
+    boylece eski bir neden yeni turda ekranda kalmaz.
+    """
     conn = get_db_connection()
     if active:
         conn.execute(
-            "UPDATE settings SET scheduler_active = 1, scheduler_started_at = ? WHERE id = 1",
+            "UPDATE settings SET scheduler_active = 1, scheduler_started_at = ?, "
+            "stop_reason = NULL WHERE id = 1",
             (datetime.now().isoformat(timespec="seconds"),),
         )
     else:
-        conn.execute("UPDATE settings SET scheduler_active = 0 WHERE id = 1")
+        conn.execute(
+            "UPDATE settings SET scheduler_active = 0, stop_reason = ? WHERE id = 1",
+            (reason,),
+        )
     conn.commit()
     conn.close()
 

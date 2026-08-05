@@ -52,6 +52,11 @@ def compute_progress():
     batch = settings["batch_size"] or 1
 
     started_at = settings["scheduler_started_at"] if running else None
+    # Gunluk limit dolunca gonderim kendiliginden durur; kalan hak ve durma
+    # nedeni gosterilir ki kullanici neden durdugunu anlasin.
+    daily_limit = settings["daily_limit"] or 0
+    sent_today = database.count_sent_today()
+    stop_reason = None if running else settings["stop_reason"]
 
     # Estimated finish: number of remaining batches * interval.
     eta = None
@@ -78,6 +83,10 @@ def compute_progress():
         "eta": eta,
         "interval": interval,
         "batch": batch,
+        "daily_limit": daily_limit,
+        "sent_today": sent_today,
+        "daily_remaining": max(daily_limit - sent_today, 0) if daily_limit else None,
+        "stop_reason": stop_reason,
     }
 
 
@@ -295,6 +304,14 @@ def start():
     if not settings["smtp_email"] or not settings["smtp_password"]:
         flash("Once mail ayarlarini girmelisiniz.", "danger")
         return redirect(url_for("index"))
+    if sched.daily_limit_reached(settings):
+        # Baslatmanin anlami yok: ilk turda gunluk limit yuzunden dururdu.
+        flash(
+            f"Bugunun gunluk limiti ({settings['daily_limit']} mail) doldu. "
+            "Gonderim yarin baslatilabilir.",
+            "warning",
+        )
+        return redirect(url_for("index"))
     sched.start()
     flash("Otomatik gonderim baslatildi.", "success")
     return redirect(url_for("index"))
@@ -346,6 +363,14 @@ def cancel_schedule(schedule_id):
 
 @app.route("/send-now", methods=["POST"])
 def send_now():
+    settings = database.get_settings()
+    if sched.daily_limit_reached(settings):
+        flash(
+            f"Bugunun gunluk limiti ({settings['daily_limit']} mail) doldu, "
+            "mail gonderilmedi.",
+            "warning",
+        )
+        return redirect(url_for("index"))
     sched.send_batch()
     flash("Bekleyen liste icin gonderim tetiklendi.", "success")
     return redirect(url_for("index"))
