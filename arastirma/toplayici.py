@@ -39,7 +39,10 @@ VARSAYILAN_TOHUM = os.path.join(KOK, "tohum_sirketler.csv")
 VARSAYILAN_CHECKPOINT = os.path.join(KOK, "checkpoint.jsonl")
 VARSAYILAN_CIKTI = os.path.join(os.path.dirname(KOK), "istanbul_yazilim_sirketleri.xlsx")
 
-BASLIKLAR = ["Firma Adı", "Web Sitesi", "İletişim E-postası", "Sektör / Faaliyet Alanı", "Kaynak"]
+BASLIKLAR = [
+    "Firma Adı", "Web Sitesi", "İletişim E-postası", "İK / Kariyer E-postası",
+    "Sektör / Faaliyet Alanı", "Kaynak", "Doğrulama",
+]
 
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 
@@ -48,6 +51,9 @@ YOLLAR = [
     "/", "/iletisim", "/iletisim/", "/tr/iletisim", "/iletisim.html", "/iletisim.php",
     "/contact", "/contact/", "/contact-us", "/contact-us/", "/en/contact",
     "/bize-ulasin", "/hakkimizda", "/about", "/about-us", "/kunye", "/kvkk", "/gizlilik",
+    # İK / kariyer sayfaları — ik@, kariyer@, career@, cv@ adresleri buralarda yayınlanır
+    "/kariyer", "/kariyer/", "/careers", "/careers/", "/career", "/ik",
+    "/insan-kaynaklari", "/jobs", "/tr/kariyer", "/en/careers",
 ]
 
 # Kurumsal (kişiye özel olmayan) yerel adlar — öncelik sırasıyla.
@@ -56,10 +62,16 @@ KURUMSAL_YEREL = [
     "kurumsal", "office", "musteri", "musterihizmetleri", "destek", "support", "help",
     "satis", "sales", "bizeulasin", "iletişim", "team", "genel",
 ]
-# Toplanabilir ama daha az tercih edilen kurumsal adresler.
-IKINCIL_YEREL = ["kvkk", "ik", "hr", "kariyer", "career", "basin", "press", "pazarlama", "marketing"]
+# İK / kariyer adresleri — ayrı sütunda toplanır, öncelik sırasıyla.
+IK_YEREL = ["ik", "kariyer", "career", "careers", "cv", "insankaynaklari", "hr", "jobs", "basvuru"]
 
-TUM_KURUMSAL = set(KURUMSAL_YEREL) | set(IKINCIL_YEREL)
+# Toplanabilir ama daha az tercih edilen kurumsal adresler.
+IKINCIL_YEREL = ["kvkk", "basin", "press", "pazarlama", "marketing"]
+
+TUM_KURUMSAL = set(KURUMSAL_YEREL) | set(IKINCIL_YEREL) | set(IK_YEREL)
+
+# Kullanıcının istediği üretim varyantları (doğrulanmamış).
+URETILECEK_VARYANTLAR = ["ik", "kariyer", "career", "cv"]
 
 EPOSTA_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 # ad.soyad / ad_soyad / ad-soyad biçimi (kişiye özel) — kurumsal listede yoksa reddedilir.
@@ -112,18 +124,37 @@ def epostalari_ayikla(metin: str, site_alani: str) -> list[str]:
     return list(bulunan)
 
 
-def en_iyi_adres(adresler: list[str]) -> str:
-    """info@ > iletisim@ > contact@ ... sırasına göre tek adres seçer."""
+def _yerel(adres: str) -> str:
+    return re.sub(r"[^a-z]", "", adres.split("@")[0])
+
+
+def ik_adresi_mi(adres: str) -> bool:
+    return _yerel(adres) in IK_YEREL
+
+
+def en_iyi_adres(adresler: list[str], sira: list[str] | None = None) -> str:
+    """Verilen öncelik sırasına göre tek adres seçer (varsayılan: info@ > iletisim@ > ...)."""
     if not adresler:
         return ""
+    sira = sira or KURUMSAL_YEREL
+
     def puan(a: str) -> int:
-        yerel = re.sub(r"[^a-z]", "", a.split("@")[0])
-        if yerel in KURUMSAL_YEREL:
-            return KURUMSAL_YEREL.index(yerel)
-        if yerel in IKINCIL_YEREL:
-            return 100 + IKINCIL_YEREL.index(yerel)
+        y = _yerel(a)
+        if y in sira:
+            return sira.index(y)
+        if y in IKINCIL_YEREL:
+            return 100 + IKINCIL_YEREL.index(y)
         return 500
+
     return sorted(adresler, key=puan)[0]
+
+
+def varyant_uret(site: str) -> str:
+    """ik@/kariyer@/career@/cv@ varyantlarını üretir. DOĞRULANMAMIŞ — bounce edebilir."""
+    alan = kayitli_alan(site_hostu(site))
+    if not alan:
+        return ""
+    return ", ".join(f"{v}@{alan}" for v in URETILECEK_VARYANTLAR)
 
 
 def sayfa_getir(oturum: requests.Session, url: str, zaman_asimi: int) -> str:
@@ -140,7 +171,7 @@ def sirketi_isle(oturum: requests.Session, sirket: dict, zaman_asimi: int, bekle
     """Tek şirketin sitesini gezip kurumsal adres arar."""
     site = (sirket.get("web_sitesi") or "").strip()
     sonuc = dict(sirket)
-    sonuc.update({"eposta": "", "eposta_kaynak_url": "", "durum": "site_yok"})
+    sonuc.update({"eposta": "", "ik_eposta": "", "eposta_kaynak_url": "", "durum": "site_yok"})
     if not site:
         return sonuc
 
@@ -148,6 +179,10 @@ def sirketi_isle(oturum: requests.Session, sirket: dict, zaman_asimi: int, bekle
     alan = kayitli_alan(host)
     taban = f"https://{host}"
     sonuc["durum"] = "site_acilmadi"
+
+    genel: list[str] = []
+    ik: list[str] = []
+    kaynak_urller: list[str] = []
 
     for yol in YOLLAR:
         html = sayfa_getir(oturum, urljoin(taban, yol), zaman_asimi)
@@ -159,11 +194,18 @@ def sirketi_isle(oturum: requests.Session, sirket: dict, zaman_asimi: int, bekle
         for m in re.findall(r'mailto:([^"\'?>\s]+)', html, re.IGNORECASE):
             adresler += epostalari_ayikla(m, alan)
         if adresler:
-            sonuc["eposta"] = en_iyi_adres(adresler)
-            sonuc["eposta_kaynak_url"] = urljoin(taban, yol)
-            sonuc["durum"] = "bulundu"
-            break
+            kaynak_urller.append(urljoin(taban, yol))
+        for a in adresler:
+            (ik if ik_adresi_mi(a) else genel).append(a)
+        if genel and ik:
+            break  # ikisi de bulundu — gereksiz istek atma
         time.sleep(bekleme)
+
+    if genel or ik:
+        sonuc["eposta"] = en_iyi_adres(genel)
+        sonuc["ik_eposta"] = en_iyi_adres(ik, sira=IK_YEREL)
+        sonuc["eposta_kaynak_url"] = kaynak_urller[0] if kaynak_urller else ""
+        sonuc["durum"] = "bulundu"
 
     return sonuc
 
@@ -224,24 +266,31 @@ def xlsx_yaz(satirlar: list[dict], cikti: str) -> None:
         h.fill = dolgu
         h.alignment = Alignment(vertical="center")
 
+    uyari_font = Font(name="Arial", size=10, color="C00000")
     for s in sorted(satirlar, key=lambda r: (r.get("firma_adi") or "").lower()):
         ws.append([
             s.get("firma_adi", ""),
             s.get("web_sitesi", ""),
             s.get("eposta", ""),
+            s.get("ik_eposta", ""),
             s.get("sektor", ""),
             s.get("kaynak", ""),
+            s.get("dogrulama", ""),
         ])
 
     for satir in ws.iter_rows(min_row=2):
         for h in satir:
             h.font = govde
             h.alignment = Alignment(vertical="center")
+        # Üretilmiş (doğrulanmamış) adresleri kırmızıya boya — gözden kaçmasın
+        if "üretildi" in str(satir[6].value or ""):
+            satir[3].font = uyari_font
+            satir[6].font = uyari_font
 
-    for i, genislik in enumerate([34, 34, 30, 40, 46], start=1):
+    for i, genislik in enumerate([34, 34, 30, 46, 34, 34, 30], start=1):
         ws.column_dimensions[get_column_letter(i)].width = genislik
     ws.freeze_panes = "A2"
-    ws.auto_filter.ref = f"A1:E{ws.max_row}"
+    ws.auto_filter.ref = f"A1:G{ws.max_row}"
 
     # Açıklama sayfası
     ws2 = wb.create_sheet("OKUBENI")
@@ -267,6 +316,13 @@ ACIKLAMA = [
     "    pip install requests openpyxl",
     "    python3 arastirma/toplayici.py --tohum arastirma/tohum_sirketler.csv",
     "Script her şirketten sonra arastirma/checkpoint.jsonl dosyasına yazar; --devam ile kaldığı yerden sürer.",
+    "",
+    "İK / Kariyer E-postası sütunu:",
+    "ik@, kariyer@, career@, cv@, insankaynaklari@, hr@, jobs@ adresleri buraya yazılır.",
+    "DİKKAT: 'Doğrulama' sütununda 'üretildi' yazan satırlardaki adresler siteden okunmamış,",
+    "alan adına bakılarak ÜRETİLMİŞTİR (kırmızı gösterilir). Bu adreslerin bir kısmı mevcut değildir",
+    "ve gönderim bounce eder; yüksek bounce oranı gönderen alan adının itibarını düşürür.",
+    "Toplu CV gönderiminden önce script'i ağ erişimi olan bir makinede çalıştırıp doğrulatın.",
     "",
     "Kaynak sütunu:",
     "Bilginin hangi siteden alındığını gösterir. 'Ön liste (doğrulanmadı)' yazan satırlar,",
@@ -320,6 +376,9 @@ def main() -> int:
     p.add_argument("--devam", action="store_true", help="Checkpoint'te olanları atla")
     p.add_argument("--sadece-yaz", action="store_true", help="Ağa çıkma, mevcut veriden xlsx üret")
     p.add_argument("--dizin-tara", metavar="URL", help="Listeleme sayfasından tohum satırları çıkar ve yazdır")
+    p.add_argument("--varyant-uret", action="store_true",
+                   help="Siteden doğrulanamayan firmalar için ik@/kariyer@/career@/cv@ üret "
+                        "(DOĞRULANMAMIŞ — bounce edebilir, ayrı sütunda kırmızı işaretlenir)")
     p.add_argument("--limit", type=int, default=0, help="En fazla kaç şirket işlensin (0 = hepsi)")
     p.add_argument("--bekleme", type=float, default=1.0, help="İstekler arası bekleme (sn)")
     p.add_argument("--zaman-asimi", type=int, default=15)
@@ -357,13 +416,27 @@ def main() -> int:
     # Tekilleştirilmiş nihai satırlar: checkpoint sonucu varsa onu, yoksa tohumu kullan
     nihai: dict[str, dict] = {}
     for s in tohum:
-        nihai[anahtar(s)] = dict(s, eposta="")
+        nihai[anahtar(s)] = dict(s, eposta="", ik_eposta="")
     for k, v in islenmis.items():
         nihai[k] = v
 
+    # Doğrulama etiketi + istenirse İK varyantı üretimi
+    for v in nihai.values():
+        dogrulanmis = bool(v.get("eposta") or v.get("ik_eposta"))
+        v["dogrulama"] = "siteden doğrulandı" if dogrulanmis else "doğrulanmadı"
+        if a.varyant_uret and not v.get("ik_eposta"):
+            uretilen = varyant_uret(v.get("web_sitesi", ""))
+            if uretilen:
+                v["ik_eposta"] = uretilen
+                v["dogrulama"] = ("genel adres doğrulandı · İK üretildi" if v.get("eposta")
+                                  else "üretildi – doğrulanmadı")
+
     xlsx_yaz(list(nihai.values()), a.cikti)
     dolu = sum(1 for v in nihai.values() if v.get("eposta"))
-    print(f"[✓] {a.cikti} yazıldı — {len(nihai)} şirket, {dolu} e-posta dolu, {len(nihai) - dolu} boş")
+    ik_dolu = sum(1 for v in nihai.values() if v.get("ik_eposta"))
+    uretilmis = sum(1 for v in nihai.values() if "üretildi" in v.get("dogrulama", ""))
+    print(f"[✓] {a.cikti} yazıldı — {len(nihai)} şirket · {dolu} genel e-posta · "
+          f"{ik_dolu} İK adresi ({uretilmis} satır ÜRETİLMİŞ, doğrulanmadı)")
     return 0
 
 
