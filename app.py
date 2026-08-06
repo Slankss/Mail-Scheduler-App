@@ -1,10 +1,20 @@
+import json
 import math
 import os
 import smtplib
 from datetime import datetime, timedelta
 
 import pandas as pd
-from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
+from flask import (
+    Flask,
+    Response,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 from werkzeug.utils import secure_filename
 
 import database
@@ -295,6 +305,58 @@ def delete_attachment(attachment_id):
             pass
         database.delete_attachment(attachment_id)
         flash("Ek silindi.", "warning")
+    return redirect(url_for("settings_page"))
+
+
+@app.route("/settings/export", methods=["GET"])
+def settings_export():
+    """Ayarlari JSON dosyasi olarak indirir.
+
+    smtp_password sifreli haliyle aktarilir (bkz. database.export_settings);
+    ancak dosyayi baska bir kurulumda ice aktarirken APP_SECRET_KEY farkliysa
+    sifre cozulemez, kullanici sifreyi elle girmelidir.
+    """
+    data = database.export_settings()
+    payload = {
+        "type": "mail-scheduler-settings",
+        "version": 1,
+        "exported_at": datetime.now().isoformat(timespec="seconds"),
+        "settings": data or {},
+    }
+    body = json.dumps(payload, indent=2, ensure_ascii=False)
+    filename = f"mail-scheduler-settings-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"
+    return Response(
+        body,
+        mimetype="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.route("/settings/import", methods=["POST"])
+def settings_import():
+    """Daha once /settings/export ile indirilmis bir JSON dosyasini ice aktarir."""
+    upload = request.files.get("settings_file")
+    if not upload or not upload.filename:
+        flash("Ice aktarmak icin bir dosya secin.", "danger")
+        return redirect(url_for("settings_page"))
+
+    try:
+        payload = json.load(upload.stream)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        flash("Dosya gecerli bir JSON degil.", "danger")
+        return redirect(url_for("settings_page"))
+
+    settings_data = payload.get("settings") if isinstance(payload, dict) else None
+    if not isinstance(settings_data, dict):
+        flash("Dosya beklenen formatta degil (settings alani bulunamadi).", "danger")
+        return redirect(url_for("settings_page"))
+
+    database.import_settings(settings_data)
+
+    if sched.is_running():
+        sched.start()  # reschedule with the imported interval
+
+    flash("Ayarlar ice aktarildi.", "success")
     return redirect(url_for("settings_page"))
 
 

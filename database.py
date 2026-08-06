@@ -138,6 +138,90 @@ def save_settings(data):
     conn.close()
 
 
+EXPORTABLE_SETTINGS_FIELDS = (
+    "smtp_server",
+    "smtp_port",
+    "smtp_email",
+    "interval_minutes",
+    "batch_size",
+    "subject",
+    "body",
+    "daily_limit",
+)
+
+
+def export_settings():
+    """Ayarlari disa aktarim icin bir sozluk olarak doner.
+
+    smtp_password bilinerek disariya duz metin verilmez: veritabanindaki
+    sifreli hali (`smtp_password_encrypted`) aktarilir. Boylece dosya calinsa
+    bile APP_SECRET_KEY olmadan sifre okunamaz. scheduler_active,
+    scheduler_started_at ve stop_reason gibi calisma-zamani alanlari da
+    disarida birakilir; bunlar "ayar" degil, o an ki durumdur.
+    """
+    conn = get_db_connection()
+    row = conn.execute("SELECT * FROM settings WHERE id = 1").fetchone()
+    conn.close()
+    if row is None:
+        return None
+    data = {field: row[field] for field in EXPORTABLE_SETTINGS_FIELDS}
+    data["smtp_password_encrypted"] = row["smtp_password"] or ""
+    return data
+
+
+def import_settings(data):
+    """Disa aktarilmis ayarlari veritabanina yazar.
+
+    `smtp_password_encrypted` alani varsa oldugu gibi (sifreli) yazilir;
+    yoksa veya bossa mevcut sifre korunur. Boylece disa aktarilan dosya
+    yalnizca ayni APP_SECRET_KEY ile calisan bir kurulumda sifreyi kullanilir
+    halde tutar; farkli bir anahtarla ice aktarilirsa sifre cozulemez ve
+    kullanicinin sifreyi elle yeniden girmesi gerekir.
+
+    Bilinmeyen/eksik alanlar yoksayilir, boylece eski/kismi disa aktarim
+    dosyalari da ice aktarilabilir. Returns the updated settings row as dict.
+    """
+    conn = get_db_connection()
+    current = conn.execute("SELECT * FROM settings WHERE id = 1").fetchone()
+
+    def pick(field, default=None):
+        return data[field] if field in data and data[field] is not None else (
+            current[field] if current is not None else default
+        )
+
+    password_encrypted = data.get("smtp_password_encrypted")
+    if not password_encrypted:
+        password_encrypted = current["smtp_password"] if current else ""
+
+    conn.execute("""
+        UPDATE settings SET
+            smtp_server = ?,
+            smtp_port = ?,
+            smtp_email = ?,
+            smtp_password = ?,
+            interval_minutes = ?,
+            batch_size = ?,
+            subject = ?,
+            body = ?,
+            daily_limit = ?
+        WHERE id = 1
+    """, (
+        pick("smtp_server", ""),
+        pick("smtp_port", 587),
+        pick("smtp_email", ""),
+        password_encrypted,
+        pick("interval_minutes", 5),
+        pick("batch_size", 1),
+        pick("subject", ""),
+        pick("body", ""),
+        pick("daily_limit", 0),
+    ))
+    conn.commit()
+    row = conn.execute("SELECT * FROM settings WHERE id = 1").fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
 def set_scheduler_active(active: bool, reason: str = None):
     """Gonderimin calisir/durmus durumunu kaydeder.
 

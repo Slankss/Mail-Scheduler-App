@@ -136,4 +136,35 @@ document.addEventListener("DOMContentLoaded", function () {
     <a href="https://myaccount.google.com/apppasswords" target="_blank">Uygulama Sifresi (App Password)</a>
     olusturup onu girmeniz gerekir. SMTP sunucu: smtp.gmail.com, Port: 587
 </div>
+
+<hr class="my-4">
+
+<h2>Ayarlari Ice/Disa Aktar</h2>
+<div class="row g-4">
+    <div class="col-md-6">
+        <h5 class="h6">Disa Aktar</h5>
+        <p class="text-muted small mb-2">
+            Mevcut ayarlari (SMTP, gonderim araligi, konu/icerik, gunluk limit vb.)
+            bir JSON dosyasi olarak indirir. Sifre alani sifreli haliyle aktarilir;
+            baska bir kurulumda ice aktarilirsa sadece ayni APP_SECRET_KEY ile
+            cozulebilir.
+        </p>
+        <a href="{{ url_for('settings_export') }}" class="btn btn-outline-primary">
+            ⬇ Ayarlari Disa Aktar
+        </a>
+    </div>
+    <div class="col-md-6">
+        <h5 class="h6">Ice Aktar</h5>
+        <p class="text-muted small mb-2">
+            Daha once disa aktarilmis bir JSON dosyasini yukleyin. Mevcut ayarlarin
+            uzerine yazilir.
+        </p>
+        <form method="post" action="{{ url_for('settings_import') }}" enctype="multipart/form-data"
+              class="d-flex gap-2 align-items-start flex-wrap"
+              onsubmit="return confirm('Mevcut ayarlarin uzerine yazilacak. Devam edilsin mi?');">
+            <input type="file" name="settings_file" accept="application/json,.json" class="form-control" style="max-width: 320px;" required>
+            <button type="submit" class="btn btn-outline-secondary">⬆ Ice Aktar</button>
+        </form>
+    </div>
+</div>
 {% endblock %}
