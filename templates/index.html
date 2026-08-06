@@ -102,12 +102,15 @@
         </div>
 
         <form method="post" action="{{ url_for('start') }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" id="btn-start" class="btn btn-success" {% if running %}disabled{% endif %}>Baslat</button>
         </form>
         <form method="post" action="{{ url_for('stop') }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" id="btn-stop" class="btn btn-danger" {% if not running %}disabled{% endif %}>Durdur</button>
         </form>
         <form method="post" action="{{ url_for('send_now') }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-primary">Simdi Gonder (1 paket)</button>
         </form>
     </div>
@@ -123,6 +126,7 @@
         </p>
 
         <form method="post" action="{{ url_for('create_schedule') }}" class="row g-2 align-items-end mb-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="col-sm-5 col-md-4">
                 <label class="form-label" for="start_at">Baslangic zamani</label>
                 <input type="datetime-local" class="form-control" id="start_at" name="start_at"
@@ -169,6 +173,7 @@
                             {% if s.status == 'pending' %}
                             <form method="post" action="{{ url_for('cancel_schedule', schedule_id=s.id) }}"
                                   onsubmit="return confirm('Bu zamanlama iptal edilsin mi?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-outline-danger btn-sm">Iptal Et</button>
                             </form>
                             {% else %}

@@ -20,6 +20,7 @@ Soğuk mail (cold mail) kampanyalarını -örneğin iş başvurusu, satış/iş 
 - **Şirket bazlı yönetim** — Kişiler şirket adına göre gruplanır; bir şirket devre dışı bırakılabilir (mail atlanır), silinebilir, mükerrer kayıtlar temizlenebilir.
 - **Dashboard** — Gönderim ilerlemesi (gönderilen/bekleyen/başarısız), tahmini bitiş zamanı, mail ve şirket bazında pasta grafikler, geri dönüş oranı gibi metrikler canlı olarak (`/progress` polling endpoint'i ile) gösterilir.
 - **Bağlantı testi** — Ayarlar sayfasından, kaydetmeden önce SMTP ve (Gmail ise) IMAP bağlantısı test edilebilir.
+- **Kullanıcı adı/şifre girişi** — Panelin tamamı giriş zorunludur; kimlik bilgileri `.env` dosyasından okunur (bkz. [Güvenlik](#güvenlik)).
 
 ## Teknoloji Yığını
 
@@ -37,6 +38,8 @@ Soğuk mail (cold mail) kampanyalarını -örneğin iş başvurusu, satış/iş 
 ```
 mail-scheduler/
 ├── app.py              # Flask route'ları, dashboard/import/gmail/contacts uçları
+├── auth.py             # Giriş/oturum, kaba kuvvet koruması, CSRF
+├── crypto.py           # Veritabanındaki sırların şifrelenmesi (Fernet)
 ├── database.py         # SQLite şeması ve tüm CRUD işlemleri
 ├── scheduler.py         # APScheduler işleri: periyodik gönderim, zamanlanmış başlangıç, günlük limit
 ├── mailer.py            # SMTP bağlantısı ve mail gönderimi
@@ -68,7 +71,11 @@ source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 cp .env-example .env
-# .env dosyasına ZERUH_API_KEY değerini girin (mail doğrulama kullanılmayacaksa boş bırakılabilir)
+# .env dosyasına en az şunları girin:
+#   APP_USERNAME       — panele giriş kullanıcı adı
+#   APP_PASSWORD_HASH  — `python auth.py hash` çıktısı
+#   APP_SECRET_KEY     — rastgele bir değer
+# ZERUH_API_KEY opsiyoneldir (mail doğrulama kullanılmayacaksa boş bırakılabilir)
 
 python app.py
 ```
@@ -83,7 +90,7 @@ FLASK_DEBUG=1 python app.py
 
 ```bash
 cp .env-example .env
-# .env dosyasına ZERUH_API_KEY değerini girin
+# .env dosyasını doldurun (APP_USERNAME, APP_PASSWORD_HASH, APP_SECRET_KEY zorunlu)
 
 docker compose up -d --build
 ```
@@ -94,20 +101,49 @@ Uygulama `http://localhost:8000` üzerinden yayınlanır. Veritabanı ve yüklen
 
 | Değişken | Açıklama | Zorunlu |
 |---|---|---|
+| `APP_USERNAME` | Panele giriş kullanıcı adı | **Evet** |
+| `APP_PASSWORD_HASH` | Giriş şifresinin hash'i (`python auth.py hash` ile üretilir) | **Evet** (ya da `APP_PASSWORD`) |
+| `APP_PASSWORD` | Giriş şifresi, düz metin. Sadece hash kullanılmıyorsa | Hayır |
+| `APP_SECRET_KEY` | Veritabanındaki SMTP şifresinin şifrelenmesi ve oturum çerezinin imzalanması | **Evet** |
+| `SESSION_COOKIE_SECURE` | `1` verilirse oturum çerezi sadece HTTPS üzerinden gönderilir (sunucuda önerilir) | Hayır (varsayılan `0`) |
 | `ZERUH_API_KEY` | Mail doğrulama için Zeruh API anahtarı | Hayır (sadece "Mail Doğrula" özelliği için) |
 | `DATA_DIR` | SQLite veritabanının ve verilerin tutulacağı klasör (varsayılan: proje kökü; Docker'da `/app/data`) | Hayır |
 | `FLASK_DEBUG` | `1` verilirse Flask debug modunda çalışır | Hayır |
 
 SMTP/IMAP mail sunucusu bilgileri `.env` dosyasında değil, uygulama içindeki **Ayarlar** sayfasından girilip veritabanında saklanır.
 
+## Güvenlik
+
+Uygulama tek kullanıcılı bir paneldir; kullanıcı adı ve şifre `.env` dosyasından okunur, veritabanında kullanıcı tablosu tutulmaz.
+
+**Kurulum:**
+
+```bash
+python auth.py hash     # şifreyi sorar, APP_PASSWORD_HASH satırını üretir
+```
+
+Çıktıyı `.env` dosyasına yapıştırın ve `APP_USERNAME` değerini girin. `APP_USERNAME` ile `APP_PASSWORD_HASH`/`APP_PASSWORD` tanımlı değilse **uygulama açılmaz** — yanlış yapılandırmada korumasız bir panelin ayakta kalmaması için bilinçli bir tercih.
+
+**Neler var:**
+
+- **Her uç korumalı** — Giriş kontrolü tek tek route'lara değil, global bir `before_request` filtresine bağlıdır. Sadece `/login` ve statik dosyalar açıktır; sonradan eklenen her route varsayılan olarak korumalı olur. Giriş yapılmadan hiçbir sayfa açılmaz, hiçbir API ucu (mail gönderimi, Gmail taraması, Zeruh doğrulaması dahil) çalışmaz.
+- **Şifre hash'lenir** — Werkzeug'un PBKDF2/scrypt hash'i kullanılır; `.env` dosyasını gören biri şifreyi okuyamaz. Kullanıcı adı ve şifre karşılaştırmaları sabit zamanlıdır (timing attack).
+- **Kaba kuvvet koruması** — Aynı IP'den 15 dakika içinde 5 hatalı denemeden sonra giriş 15 dakika kilitlenir. Hangi alanın yanlış olduğu söylenmez.
+- **Oturum güvenliği** — Çerez `HttpOnly` + `SameSite=Lax`, `APP_SECRET_KEY`'den türetilen anahtarla imzalanır. 2 saat işlem yapılmazsa ya da giriş üzerinden 12 saat geçerse oturum düşer. Girişte oturum sıfırlanır (session fixation).
+- **CSRF koruması** — Durum değiştiren tüm istekler (form gönderimleri ve `fetch` çağrıları) oturuma bağlı bir token taşır; başka bir siteden tetiklenen istekler reddedilir.
+- **Güvenlik başlıkları** — `X-Frame-Options: DENY` (clickjacking), `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`.
+
+**Dikkat:** Uygulama HTTPS sonlandırmaz. Yerel ağ dışına açılacaksa bir ters vekil (nginx/Caddy) arkasında TLS ile yayınlanmalı ve `SESSION_COOKIE_SECURE=1` yapılmalıdır; aksi halde şifre ve oturum çerezi ağda düz metin gider.
+
 ## Kullanım Akışı
 
-1. **Ayarlar** sayfasından SMTP sunucusu, e-posta adresi, uygulama şifresi, mail konusu/gövdesi, gönderim aralığı (dakika), parti büyüklüğü ve (istenirse) günlük gönderim limiti girilir. "Bağlantıyı Test Et" ile SMTP/IMAP doğrulanabilir.
-2. **İçe Aktar** sayfasından bir Excel dosyası yüklenerek kişi listesi oluşturulur.
-3. İsteğe bağlı olarak **Kişiler** sayfasında liste Zeruh ile doğrulanır, mükerrerler temizlenir, istenmeyen şirketler devre dışı bırakılır/silinir.
-4. Ana sayfadan **Başlat** ile otomatik gönderim başlatılır ya da ileri bir tarihe zamanlanır; **Şimdi Gönder** ile bekleyen bir parti anında yollanır.
-5. **Gmail** sayfasından, daha önce yazışılmış şirketler taranıp "gönderildi" olarak işaretlenebilir; **Yanıtları Kontrol Et** ile gönderim sonrası gelen cevaplar otomatik tespit edilir.
-6. Ana sayfadaki dashboard, ilerleme yüzdesi, tahmini bitiş zamanı ve gönderim/yanıt grafikleriyle sürecin durumunu canlı gösterir.
+1. Açılan **giriş** ekranına `.env` dosyasındaki kullanıcı adı/şifre girilir.
+2. **Ayarlar** sayfasından SMTP sunucusu, e-posta adresi, uygulama şifresi, mail konusu/gövdesi, gönderim aralığı (dakika), parti büyüklüğü ve (istenirse) günlük gönderim limiti girilir. "Bağlantıyı Test Et" ile SMTP/IMAP doğrulanabilir.
+3. **İçe Aktar** sayfasından bir Excel dosyası yüklenerek kişi listesi oluşturulur.
+4. İsteğe bağlı olarak **Kişiler** sayfasında liste Zeruh ile doğrulanır, mükerrerler temizlenir, istenmeyen şirketler devre dışı bırakılır/silinir.
+5. Ana sayfadan **Başlat** ile otomatik gönderim başlatılır ya da ileri bir tarihe zamanlanır; **Şimdi Gönder** ile bekleyen bir parti anında yollanır.
+6. **Gmail** sayfasından, daha önce yazışılmış şirketler taranıp "gönderildi" olarak işaretlenebilir; **Yanıtları Kontrol Et** ile gönderim sonrası gelen cevaplar otomatik tespit edilir.
+7. Ana sayfadaki dashboard, ilerleme yüzdesi, tahmini bitiş zamanı ve gönderim/yanıt grafikleriyle sürecin durumunu canlı gösterir.
 
 ## Veri Modeli (özet)
 

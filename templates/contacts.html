@@ -39,6 +39,7 @@
                 <form method="post" action="{{ url_for('check_replies') }}" class="js-loading"
                       data-loading-text="Kontrol ediliyor..."
                       onsubmit="return confirm('Mail atilan firmalardan gelen cevaplar Gmail\'de aranacak. Bu islem birkac dakika surebilir. Devam edilsin mi?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="dropdown-item">Geri donus kontrol et</button>
                 </form>
             </li>
@@ -51,6 +52,7 @@
             <li>
                 <form method="post" action="{{ url_for('dedupe_contacts') }}"
                       onsubmit="return confirm('Ayni maile sahip tekrar eden kayitlar silinecek (gonderilmis olan korunur). Devam edilsin mi?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="dropdown-item">Tekrar edenleri temizle</button>
                 </form>
             </li>
@@ -59,6 +61,7 @@
             <li>
                 <form method="post" action="{{ url_for('clear_contacts') }}"
                       onsubmit="return confirm('Tum kisi listesi silinecek, emin misiniz?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="dropdown-item text-danger">Listeyi temizle</button>
                 </form>
             </li>

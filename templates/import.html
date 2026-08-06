@@ -4,6 +4,7 @@
 <p>Excel dosyasinda en az bir <strong>email</strong> sutunu (basliginda "mail" gecmeli) olmali. Isteğe bagli olarak isim sutunu da olabilir (basliginda "name", "isim" veya "ad" gecmeli).</p>
 
 <form method="post" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="mb-3">
         <input type="file" class="form-control" name="excel_file" accept=".xlsx,.xls" required>
     </div>

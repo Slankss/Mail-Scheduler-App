@@ -1,3 +1,4 @@
+import hashlib
 import math
 import os
 import smtplib
@@ -7,6 +8,8 @@ import pandas as pd
 from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
 from werkzeug.utils import secure_filename
 
+import auth
+import crypto
 import database
 import gmail_client
 import mailer
@@ -16,12 +19,123 @@ import verifier
 UPLOAD_DIR = database.DATA_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
+# Kimlik bilgileri eksikse uygulama hic acilmaz: korumasiz bir panelin ayakta
+# olmasindansa acilista hata vermek yeglenir.
+auth.check_config()
+
 app = Flask(__name__)
-app.secret_key = "mail-scheduler-secret-key"
+# Oturum cookie'sinin imza anahtari .env'deki APP_SECRET_KEY'den turetilir
+# (sifreleme anahtarindan farkli bir turetim, ayni sir iki ise ayni bicimde
+# girmesin diye). Sabit bir anahtar kodda tutulmaz: bilen herkes gecerli
+# oturum cookie'si uretebilirdi.
+app.secret_key = hashlib.sha256(b"session:" + crypto.secret_material()).digest()
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,   # JavaScript cookie'yi okuyamaz
+    SESSION_COOKIE_SAMESITE="Lax",  # baska siteden gelen POST'lar cookie tasimaz
+    # HTTPS arkasinda calisirken .env'de SESSION_COOKIE_SECURE=1 yapin; localhost
+    # (http) icin acik birakilirsa oturum hic kurulamaz.
+    SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE", "0") == "1",
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=2),  # bosta kalma suresi
+    SESSION_REFRESH_EACH_REQUEST=True,
+)
 
 database.init_db()
 # APScheduler isleri bellekte durur; kayitli zamanlamalar her acilista kurulur.
 sched.restore_schedules()
+
+# Girise izin verilen tek uclar. Liste "izin verilenler" seklinde tutulur:
+# yeni bir route eklendiginde varsayilan olarak korumali olur, korumasiz degil.
+PUBLIC_ENDPOINTS = {"login", "static"}
+
+
+@app.before_request
+def require_login():
+    """Her istekten once oturum ve CSRF kontrolu.
+
+    Tek tek route'lara dekorator koymak yerine global bir filtre kullanilir:
+    ileride eklenecek bir ucun korumasiz kalmasi mumkun olmasin diye.
+    """
+    if request.endpoint in PUBLIC_ENDPOINTS:
+        return None
+
+    if not auth.is_logged_in():
+        return auth.deny()
+
+    # Oturum acikken de CSRF gerekir: baska bir sitedeki form/istek, tarayicidaki
+    # gecerli oturumu kullanarak mail gonderimi baslatmasin.
+    if auth.needs_csrf_check() and not auth.csrf_ok():
+        if auth.wants_json():
+            return jsonify({"error": "Gecersiz ya da eksik CSRF token."}), 400
+        flash("Guvenlik dogrulamasi basarisiz (CSRF). Sayfayi yenileyip tekrar deneyin.", "danger")
+        return redirect(url_for("index"))
+
+    return None
+
+
+@app.context_processor
+def inject_auth():
+    """Sablonlarda csrf_token() ve current_user kullanilabilsin."""
+    return {"csrf_token": auth.csrf_token, "current_user": auth.current_user()}
+
+
+@app.after_request
+def security_headers(response):
+    """Temel tarayici korumalari."""
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")  # clickjacking
+    response.headers.setdefault("Referrer-Policy", "same-origin")
+    return response
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if auth.is_logged_in():
+        return redirect(url_for("index"))
+
+    if request.method == "POST":
+        # Giris formu de CSRF token tasir: baska bir site, kullaniciyi farkinda
+        # olmadan kendi belirledigi bir hesaba giris yaptiramasin.
+        if not auth.csrf_ok():
+            flash("Oturum dogrulanamadi. Sayfayi yenileyip tekrar deneyin.", "danger")
+            return render_template("login.html"), 400
+
+        locked = auth.lockout_remaining()
+        if locked:
+            flash(
+                f"Cok fazla hatali deneme. {locked // 60 + 1} dakika sonra tekrar deneyin.",
+                "danger",
+            )
+            return render_template("login.html"), 429
+
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
+
+        if auth.verify_credentials(username, password):
+            auth.reset_failures()
+            auth.login_user(username.strip())
+            target = auth.safe_next_target(request.args.get("next", ""))
+            return redirect(target or url_for("index"))
+
+        locked = auth.record_failure()
+        # Hangi alanin yanlis oldugu soylenmez: kullanici adi tahmini
+        # kolaylasmasin.
+        if locked:
+            flash(
+                f"Cok fazla hatali deneme. Giris {locked // 60 + 1} dakika kilitlendi.",
+                "danger",
+            )
+        else:
+            flash("Kullanici adi ya da sifre hatali.", "danger")
+        return render_template("login.html"), 401
+
+    return render_template("login.html")
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    auth.logout_user()
+    flash("Cikis yapildi.", "info")
+    return redirect(url_for("login"))
 
 
 def compute_progress():
