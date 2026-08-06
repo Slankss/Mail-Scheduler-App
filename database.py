@@ -3,6 +3,8 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
+import crypto
+
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "mailer.db"
@@ -86,13 +88,28 @@ def init_db():
 
 
 def get_settings():
+    """Ayarlari doner; smtp_password veritabaninda sifreli tutulur, burada
+    cozulup duz metin olarak geri verilir (SMTP/IMAP baglantisi bunu bekler).
+    """
     conn = get_db_connection()
     row = conn.execute("SELECT * FROM settings WHERE id = 1").fetchone()
     conn.close()
-    return row
+    if row is None:
+        return None
+    settings = dict(row)
+    settings["smtp_password"] = crypto.decrypt(settings["smtp_password"])
+    return settings
 
 
 def save_settings(data):
+    """Ayarlari kaydeder. smtp_password veritabaninda sifreli saklanir; formda
+    bos birakilmissa (kullanici degistirmek istememis) mevcut sifre korunur.
+    """
+    password = data["smtp_password"]
+    if not password:
+        current = get_settings()
+        password = current["smtp_password"] if current else ""
+
     conn = get_db_connection()
     conn.execute("""
         UPDATE settings SET
@@ -110,7 +127,7 @@ def save_settings(data):
         data["smtp_server"],
         data["smtp_port"],
         data["smtp_email"],
-        data["smtp_password"],
+        crypto.encrypt(password),
         data["interval_minutes"],
         data["batch_size"],
         data["subject"],

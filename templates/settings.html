@@ -21,7 +21,11 @@
         </div>
         <div class="col-md-6">
             <label class="form-label">Sifre / Uygulama Sifresi</label>
-            <input type="password" class="form-control" name="smtp_password" value="{{ settings.smtp_password or '' }}" required>
+            <input type="password" class="form-control" name="smtp_password" value=""
+                   autocomplete="new-password" spellcheck="false"
+                   placeholder="{{ '••••••••  (degistirmek icin yeni sifre girin)' if settings.smtp_password else '' }}"
+                   oncopy="return false" oncut="return false" oncontextmenu="return false">
+            <div class="form-text">Guvenlik icin kayitli sifre burada gosterilmez. Degistirmek istemiyorsaniz bos birakin.</div>
         </div>
     </div>
 
