@@ -741,6 +741,24 @@ def import_db(file_stream):
     return backup_name
 
 
+def get_existing_domains():
+    """Kayitli kisilerin mail domain'lerini kucuk harfle bir kume olarak doner.
+
+    Manuel sirket eklerken kullanilir: bir domain zaten bir kayitta varsa (hangi
+    varyantla eklenmis olursa olsun) o sirket zaten taninmis sayilir ve tekrar
+    eklenmez.
+    """
+    conn = get_db_connection()
+    rows = conn.execute("SELECT email FROM contacts").fetchall()
+    conn.close()
+    domains = set()
+    for row in rows:
+        email = (row["email"] or "").strip().lower()
+        if "@" in email:
+            domains.add(email.rsplit("@", 1)[-1])
+    return domains
+
+
 def get_mail_variants():
     """Tanimli varyant on-eklerini doner (ör. ['info', 'satis']), ekleme sirasiyla."""
     conn = get_db_connection()

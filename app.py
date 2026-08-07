@@ -704,7 +704,7 @@ def derive_company_name(domain):
     return label.title()
 
 
-def build_manual_company_rows(text, variants):
+def build_manual_company_rows(text, variants, existing_domains=()):
     """Manuel sirket ekleme formundaki metni (name, email) satirlarina cevirir.
 
     Her satir bir sirket: "Isim; domain-ya-da-mail" ya da isimsiz olarak sadece
@@ -713,11 +713,18 @@ def build_manual_company_rows(text, variants):
     yoksa: girilen deger zaten tam bir mail adresiyse oldugu gibi, sadece
     domain'se "info@domain" olarak eklenir.
 
-    Returns: (rows, company_count, skipped_count).
+    `existing_domains`: kayitli kisilerin domain kumesi (bkz.
+    database.get_existing_domains). Domain'i bu kumede olan sirket tekrar
+    eklenmez: sirket zaten taniniyor sayilir, tek tek mail adresi eslestirmesi
+    yapilmaz.
+
+    Returns: (rows, company_count, skipped_count, existing_count).
     """
+    existing_domains = {d.lower() for d in existing_domains}
     rows = []
     company_count = 0
     skipped = 0
+    existing_count = 0
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line:
@@ -741,6 +748,10 @@ def build_manual_company_rows(text, variants):
             skipped += 1
             continue
 
+        if domain in existing_domains:
+            existing_count += 1
+            continue
+
         if not name:
             name = derive_company_name(domain)
 
@@ -754,7 +765,7 @@ def build_manual_company_rows(text, variants):
         rows.extend((name, email) for email in emails)
         company_count += 1
 
-    return rows, company_count, skipped
+    return rows, company_count, skipped, existing_count
 
 
 @app.route("/companies/add", methods=["GET", "POST"])
@@ -764,10 +775,20 @@ def add_companies_page():
 
     if request.method == "POST":
         text = request.form.get("companies_text", "")
-        rows, company_count, skipped = build_manual_company_rows(text, variants)
+        existing_domains = database.get_existing_domains()
+        rows, company_count, skipped, existing_count = build_manual_company_rows(
+            text, variants, existing_domains
+        )
 
         if not rows:
-            flash("Eklenecek gecerli bir satir bulunamadi.", "danger")
+            if existing_count:
+                flash(
+                    f"Girilen {existing_count} sirketin domaini zaten kayitli, "
+                    "tekrar eklenmedi.",
+                    "warning",
+                )
+            else:
+                flash("Eklenecek gecerli bir satir bulunamadi.", "danger")
             return redirect(url_for("add_companies_page"))
 
         inserted = database.import_contacts(rows)
@@ -775,6 +796,8 @@ def add_companies_page():
         msg = f"{company_count} sirket icin {inserted} mail adresi eklendi."
         if duplicates:
             msg += f" {duplicates} adres zaten kayitli oldugu icin eklenmedi."
+        if existing_count:
+            msg += f" {existing_count} sirketin domaini zaten kayitli oldugu icin atlandi."
         if skipped:
             msg += f" {skipped} satir okunamadi, atlandi."
         flash(msg, "success" if inserted else "warning")
