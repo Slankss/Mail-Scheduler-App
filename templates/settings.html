@@ -163,6 +163,7 @@ document.addEventListener("DOMContentLoaded", function () {
         <form method="post" action="{{ url_for('settings_import') }}" enctype="multipart/form-data"
               class="d-flex gap-2 align-items-start flex-wrap"
               onsubmit="return confirm('Mevcut ayarlarin uzerine yazilacak. Devam edilsin mi?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="file" name="settings_file" accept="application/json,.json" class="form-control" style="max-width: 320px;" required>
             <button type="submit" class="btn btn-outline-secondary">⬆ Ice Aktar</button>
         </form>
