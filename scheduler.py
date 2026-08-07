@@ -171,3 +171,17 @@ def restore_schedules():
             database.set_schedule_status(
                 row["id"], "missed", "Uygulama kapali oldugu icin calistirilamadi."
             )
+
+
+def reset():
+    """Bellekteki tum APScheduler islerini atip veritabanindan yeniden kurar.
+
+    Bir veritabani ice aktariminda kullanilir: eski dosya calisirken kurulmus
+    is'ler (gonderim araligi, ileri tarihli baslangiclar) artik disk uzerindeki
+    yeni veriye karsilik gelmeyebilir - biri digerinin id'sini tasiyabilir ve
+    yanlis veriyle calisabilirdi. Otomatik gonderim burada kasten yeniden
+    baslatilmaz (caller, ice aktarim sonrasi durumu kullaniciya gosterip
+    baslatmayi ona birakir); sadece ileri tarihli baslangiclar geri yuklenir.
+    """
+    scheduler.remove_all_jobs()
+    restore_schedules()

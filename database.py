@@ -1,4 +1,5 @@
 import os
+import shutil
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -671,6 +672,65 @@ def delete_contacts_by_ids(ids):
     conn.commit()
     conn.close()
     return deleted
+
+
+REQUIRED_DB_TABLES = {"settings", "contacts", "schedules", "attachments"}
+
+
+def export_db_path():
+    """Tam yedek icin indirilecek ham SQLite dosyasinin yolu.
+
+    smtp_password veritabaninda zaten sifreli tutuldugu icin (bkz. crypto.py)
+    dosya oldugu gibi verilir; baska bir kurulumda ice aktarilirsa sifre
+    yalnizca ayni APP_SECRET_KEY ile cozulebilir. Yuklenen ek dosyalarin
+    kendisi (data/uploads) bu dosyaya dahil degildir, sadece isim/yol kaydi.
+    """
+    return DB_PATH
+
+
+def import_db(file_stream):
+    """Yuklenen bir SQLite dosyasiyla tum veritabaninin yerini degistirir.
+
+    Diske dokunmadan once yuklenen dosyanin okunabilir bir SQLite veritabani
+    oldugu ve beklenen tablolari icerdigi dogrulanir; boylece bozuk/yanlis bir
+    dosya calisan veritabanini bozamaz. Mevcut dosya, ice aktarim yanlis
+    cikarsa geri donulebilsin diye zaman damgali bir yedek olarak birakilir.
+    init_db() sonda cagrilir ki eski semali bir yedek de eksik kolonlarini
+    kazansin.
+
+    Returns: alinan yedegin dosya adi (onceden dosya yoksa None).
+    Raises: ValueError, dosya gecerli degilse veya beklenen tablolari
+    icermiyorsa.
+    """
+    tmp_path = DATA_DIR / f".mailer.db.upload-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    with open(tmp_path, "wb") as f:
+        shutil.copyfileobj(file_stream, f)
+
+    try:
+        conn = sqlite3.connect(tmp_path)
+        tables = {
+            row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+        conn.close()
+    except sqlite3.DatabaseError as exc:
+        tmp_path.unlink(missing_ok=True)
+        raise ValueError(f"Gecerli bir SQLite veritabani degil: {exc}")
+
+    missing = REQUIRED_DB_TABLES - tables
+    if missing:
+        tmp_path.unlink(missing_ok=True)
+        raise ValueError(
+            "Dosya beklenen formatta degil, eksik tablolar: " + ", ".join(sorted(missing))
+        )
+
+    backup_name = None
+    if DB_PATH.exists():
+        backup_name = f"mailer.db.bak-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        shutil.copy2(DB_PATH, DATA_DIR / backup_name)
+
+    shutil.move(str(tmp_path), str(DB_PATH))
+    init_db()  # eski semali bir yedek yuklenmisse eksik kolonlari ekler
+    return backup_name
 
 
 def delete_contacts_by_company_names(names):

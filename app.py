@@ -14,6 +14,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     url_for,
 )
 from werkzeug.utils import secure_filename
@@ -472,6 +473,60 @@ def settings_import():
 
     flash("Ayarlar ice aktarildi.", "success")
     return redirect(url_for("settings_page"))
+
+
+@app.route("/db/export", methods=["GET"])
+def db_export():
+    """Tum veritabanini (ayarlar, kisiler, zamanlamalar, ek dosya kayitlari)
+    ham SQLite dosyasi olarak indirir.
+
+    Ayarlar disa aktarimindan (/settings/export) farki: o sadece ayarlari JSON
+    olarak verir, bu ise kisi listesi ve zamanlamalar dahil her seyi tasir -
+    tam yedek/tasima icin kullanilir. Yuklenen ek dosyalarin kendisi (data/uploads)
+    dahil degildir, sadece isim/yol kaydi.
+    """
+    filename = f"mail-scheduler-db-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
+    return send_file(
+        database.export_db_path(),
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/x-sqlite3",
+    )
+
+
+@app.route("/db/import", methods=["POST"])
+def db_import():
+    """Daha once /db/export ile indirilmis bir SQLite dosyasini ice aktarir.
+
+    Otomatik gonderim calisiyorsa once durdurulur: ice aktarilan veri farkli
+    bir kisi listesi/ayar tasiyabilir, kullanicinin yeni durumu gormeden
+    gonderimin devam etmesi istenmez. Bellekteki zamanlanmis isler de
+    sched.reset() ile yeni veritabanindan yeniden kurulur.
+    """
+    upload = request.files.get("db_file")
+    if not upload or not upload.filename:
+        flash("Ice aktarmak icin bir dosya secin.", "danger")
+        return redirect(url_for("settings_page"))
+
+    was_running = sched.is_running()
+    if was_running:
+        sched.stop()
+
+    try:
+        backup_name = database.import_db(upload.stream)
+    except ValueError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("settings_page"))
+
+    sched.reset()
+
+    msg = "Veritabani ice aktarildi."
+    if backup_name:
+        msg += f" Onceki veritabani '{backup_name}' olarak yedeklendi."
+    if was_running:
+        msg += " Otomatik gonderim guvenlik icin durduruldu, kontrol edip isterseniz tekrar baslatin."
+    flash(msg, "warning" if was_running else "success")
+    return redirect(url_for("index"))
 
 
 @app.route("/start", methods=["POST"])
