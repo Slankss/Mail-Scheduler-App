@@ -716,7 +716,9 @@ def build_manual_company_rows(text, variants, existing_domains=()):
     `existing_domains`: kayitli kisilerin domain kumesi (bkz.
     database.get_existing_domains). Domain'i bu kumede olan sirket tekrar
     eklenmez: sirket zaten taniniyor sayilir, tek tek mail adresi eslestirmesi
-    yapilmaz.
+    yapilmaz. Ayni domain metnin icinde birden fazla satirda geçiyorsa da
+    (aynı toplu ekleme icinde) sadece ilk gecistigi satir islenir; bu kume
+    isleme sirasinda guncellenerek sonraki satirlarda da kontrol edilir.
 
     Returns: (rows, company_count, skipped_count, existing_count).
     """
@@ -751,6 +753,7 @@ def build_manual_company_rows(text, variants, existing_domains=()):
         if domain in existing_domains:
             existing_count += 1
             continue
+        existing_domains.add(domain)
 
         if not name:
             name = derive_company_name(domain)
