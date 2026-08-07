@@ -62,6 +62,14 @@ def init_db():
             path TEXT NOT NULL
         )
     """)
+    # Manuel sirket eklerken domain'e uygulanacak mail on-ekleri (ör. "info",
+    # "satis"): bir domain girildiginde her varyant icin ayri bir adres uretilir.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS mail_variants (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            prefix TEXT NOT NULL UNIQUE COLLATE NOCASE
+        )
+    """)
     # Ensure a single settings row exists
     conn.execute("INSERT OR IGNORE INTO settings (id) VALUES (1)")
     # Migration: add columns to existing databases
@@ -731,6 +739,47 @@ def import_db(file_stream):
     shutil.move(str(tmp_path), str(DB_PATH))
     init_db()  # eski semali bir yedek yuklenmisse eksik kolonlari ekler
     return backup_name
+
+
+def get_mail_variants():
+    """Tanimli varyant on-eklerini doner (ör. ['info', 'satis']), ekleme sirasiyla."""
+    conn = get_db_connection()
+    rows = conn.execute("SELECT prefix FROM mail_variants ORDER BY id").fetchall()
+    conn.close()
+    return [row["prefix"] for row in rows]
+
+
+def get_mail_variant_rows():
+    """Ayarlar sayfasinda id'siyle listelemek icin (silme butonu id'yi kullanir)."""
+    conn = get_db_connection()
+    rows = conn.execute("SELECT * FROM mail_variants ORDER BY id").fetchall()
+    conn.close()
+    return rows
+
+
+def add_mail_variant(prefix):
+    """Yeni bir varyant on-eki ekler. Bos ya da zaten kayitliysa (buyuk/kucuk harf
+    fark etmeksizin) hicbir sey yapmaz. Returns: eklendiyse True."""
+    prefix = (prefix or "").strip().lower()
+    if not prefix:
+        return False
+    conn = get_db_connection()
+    try:
+        conn.execute("INSERT INTO mail_variants (prefix) VALUES (?)", (prefix,))
+        conn.commit()
+        added = True
+    except sqlite3.IntegrityError:
+        added = False
+    conn.close()
+    return added
+
+
+def delete_mail_variant(variant_id):
+    conn = get_db_connection()
+    cur = conn.execute("DELETE FROM mail_variants WHERE id = ?", (variant_id,))
+    conn.commit()
+    conn.close()
+    return cur.rowcount
 
 
 def delete_contacts_by_company_names(names):

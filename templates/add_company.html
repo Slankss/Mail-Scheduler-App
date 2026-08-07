@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Sirket Ekle</h2>
+<p>
+    Her satira bir sirket yazin. Format: <code>Sirket Adi; domain.com</code> ya da isim vermeden
+    sadece <code>domain.com</code> veya <code>ornek@domain.com</code>. Isim yazilmazsa domain
+    adindan otomatik turetilir (ör. <code>acme-corp.com</code> -&gt; <code>Acme Corp</code>).
+</p>
+
+{% if variants %}
+<p class="text-muted small">
+    Aktif mail varyantlari:
+    {% for v in variants %}<code>{{ v }}@</code>{{ ", " if not loop.last }}{% endfor %}.
+    Sadece domain girilen (ya da varyant varken tam mail adresi girilen) her sirket icin
+    bu varyantlarin tumuyle ayri birer mail adresi eklenir.
+    <a href="{{ url_for('settings_page') }}">Ayarlar'dan degistirebilirsiniz</a>.
+</p>
+{% else %}
+<p class="text-muted small">
+    Henuz mail varyanti tanimlanmadi; sadece domain girilen sirketlere varsayilan olarak
+    <code>info@domain</code> eklenir. Varyant eklemek icin
+    <a href="{{ url_for('settings_page') }}">Ayarlar</a> sayfasina bakin.
+</p>
+{% endif %}
+
+<form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="mb-3">
+        <textarea class="form-control" name="companies_text" rows="10" required
+            placeholder="Acme A.S.; acme.com&#10;example.com&#10;info@baskasirket.com"></textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">Ekle</button>
+</form>
+{% endblock %}

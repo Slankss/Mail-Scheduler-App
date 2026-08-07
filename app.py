@@ -341,7 +341,10 @@ def settings_page():
 
     settings = database.get_settings()
     attachments = database.get_attachments()
-    return render_template("settings.html", settings=settings, attachments=attachments)
+    variants = database.get_mail_variant_rows()
+    return render_template(
+        "settings.html", settings=settings, attachments=attachments, variants=variants
+    )
 
 
 @app.route("/settings/test", methods=["POST"])
@@ -408,6 +411,23 @@ def settings_test_connection():
         })
 
     return jsonify({"ok": all(c["ok"] for c in checks if c["ok"] is not None), "checks": checks})
+
+
+@app.route("/settings/variants/add", methods=["POST"])
+def add_variant():
+    prefix = request.form.get("prefix", "")
+    if database.add_mail_variant(prefix):
+        flash(f"'{prefix.strip().lower()}' varyant olarak eklendi.", "success")
+    else:
+        flash("Varyant eklenemedi (bos birakilmis olabilir ya da zaten kayitli).", "warning")
+    return redirect(url_for("settings_page"))
+
+
+@app.route("/settings/variants/<int:variant_id>/delete", methods=["POST"])
+def delete_variant(variant_id):
+    if database.delete_mail_variant(variant_id):
+        flash("Varyant silindi.", "warning")
+    return redirect(url_for("settings_page"))
 
 
 @app.route("/attachments/<int:attachment_id>/delete", methods=["POST"])
@@ -661,6 +681,106 @@ def import_page():
         return redirect(url_for("contacts_page"))
 
     return render_template("import.html")
+
+
+def extract_domain(value):
+    """"acme.com", "https://www.acme.com/", "info@acme.com" -> "acme.com"."""
+    value = value.strip().lower()
+    if "@" in value:
+        value = value.rsplit("@", 1)[-1]
+    for prefix in ("https://", "http://"):
+        if value.startswith(prefix):
+            value = value[len(prefix):]
+    if value.startswith("www."):
+        value = value[4:]
+    value = value.split("/")[0]
+    return value.strip(".")
+
+
+def derive_company_name(domain):
+    """"acme-corp.com" -> "Acme Corp". Sirket ismi verilmediginde kullanilir."""
+    label = domain.split(".")[0] if domain else ""
+    label = label.replace("-", " ").replace("_", " ").strip()
+    return label.title()
+
+
+def build_manual_company_rows(text, variants):
+    """Manuel sirket ekleme formundaki metni (name, email) satirlarina cevirir.
+
+    Her satir bir sirket: "Isim; domain-ya-da-mail" ya da isimsiz olarak sadece
+    "domain-ya-da-mail". Varyant tanimliysa (Ayarlar) domain'e her varyant icin
+    bir adres uretilir; boylece tek bir domain girmek yeterli olur. Varyant
+    yoksa: girilen deger zaten tam bir mail adresiyse oldugu gibi, sadece
+    domain'se "info@domain" olarak eklenir.
+
+    Returns: (rows, company_count, skipped_count).
+    """
+    rows = []
+    company_count = 0
+    skipped = 0
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        if ";" in line:
+            name, _, value = line.partition(";")
+            name = name.strip()
+            value = value.strip()
+        else:
+            name = ""
+            value = line
+
+        if not value:
+            skipped += 1
+            continue
+
+        has_email = "@" in value
+        domain = extract_domain(value)
+        if not domain or "." not in domain:
+            skipped += 1
+            continue
+
+        if not name:
+            name = derive_company_name(domain)
+
+        if variants:
+            emails = [f"{variant}@{domain}" for variant in variants]
+        elif has_email:
+            emails = [value]
+        else:
+            emails = [f"info@{domain}"]
+
+        rows.extend((name, email) for email in emails)
+        company_count += 1
+
+    return rows, company_count, skipped
+
+
+@app.route("/companies/add", methods=["GET", "POST"])
+def add_companies_page():
+    """Excel yuklemeden, elle tek ya da bir liste sirket eklemek icin."""
+    variants = database.get_mail_variants()
+
+    if request.method == "POST":
+        text = request.form.get("companies_text", "")
+        rows, company_count, skipped = build_manual_company_rows(text, variants)
+
+        if not rows:
+            flash("Eklenecek gecerli bir satir bulunamadi.", "danger")
+            return redirect(url_for("add_companies_page"))
+
+        inserted = database.import_contacts(rows)
+        duplicates = len(rows) - inserted
+        msg = f"{company_count} sirket icin {inserted} mail adresi eklendi."
+        if duplicates:
+            msg += f" {duplicates} adres zaten kayitli oldugu icin eklenmedi."
+        if skipped:
+            msg += f" {skipped} satir okunamadi, atlandi."
+        flash(msg, "success" if inserted else "warning")
+        return redirect(url_for("contacts_page"))
+
+    return render_template("add_company.html", variants=variants)
 
 
 @app.route("/gmail", methods=["GET", "POST"])

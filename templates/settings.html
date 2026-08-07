@@ -140,6 +140,41 @@ document.addEventListener("DOMContentLoaded", function () {
 
 <hr class="my-4">
 
+<h2>Mail Varyantlari</h2>
+<p class="text-muted small mb-3">
+    <a href="{{ url_for('add_companies_page') }}">Sirket Ekle</a> sayfasindan sadece bir domain
+    girildiginde, asagidaki varyantlarin her biri icin ayri bir mail adresi olusturulur
+    (ör. varyant <code>info</code> + domain <code>acme.com</code> -&gt; <code>info@acme.com</code>).
+    Hicbir varyant tanimlanmazsa domain'e varsayilan olarak <code>info@</code> eklenir.
+</p>
+<div class="row g-4 mb-2">
+    <div class="col-md-6">
+        <form method="post" action="{{ url_for('add_variant') }}" class="d-flex gap-2 mb-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="text" class="form-control" name="prefix" placeholder="ör. info, satis, iletisim" required>
+            <button type="submit" class="btn btn-outline-primary text-nowrap">+ Ekle</button>
+        </form>
+        {% if variants %}
+        <ul class="list-group">
+            {% for v in variants %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span><code>{{ v.prefix }}@...</code></span>
+                <form method="post" action="{{ url_for('delete_variant', variant_id=v.id) }}"
+                      onsubmit="return confirm('&quot;{{ v.prefix }}&quot; varyanti silinsin mi?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-danger btn-sm">Sil</button>
+                </form>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted small">Henuz varyant eklenmedi.</p>
+        {% endif %}
+    </div>
+</div>
+
+<hr class="my-4">
+
 <h2>Ayarlari Ice/Disa Aktar</h2>
 <div class="row g-4">
     <div class="col-md-6">
