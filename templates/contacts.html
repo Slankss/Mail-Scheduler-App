@@ -112,6 +112,12 @@
                 <input type="checkbox" class="form-check-input company-checkbox" value="{{ company.name }}"
                        aria-label="{{ company.name }} sirketini sec">
             </div>
+            {% if company.website %}
+            <div class="d-flex align-items-center ps-2 bg-body">
+                <a href="{{ company.website }}" target="_blank" rel="noopener"
+                   class="link-secondary" title="Web sitesini yeni sekmede ac">&#128279;</a>
+            </div>
+            {% endif %}
             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                     data-bs-target="#company-{{ loop.index }}" style="width: auto; flex: 1 1 auto;">
                 <span class="me-3 fw-bold">{{ company.name }}</span>

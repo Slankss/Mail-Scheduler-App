@@ -704,15 +704,31 @@ def derive_company_name(domain):
     return label.title()
 
 
-def build_manual_company_rows(text, variants, existing_domains=()):
-    """Manuel sirket ekleme formundaki metni (name, email) satirlarina cevirir.
+def normalize_website(website):
+    """Sirketler sayfasinda tiklanabilir link olarak kullanilabilsin diye
+    web sitesi adresine sema ekler ("acme.com" -> "https://acme.com").
+    Zaten http(s):// ile basliyorsa dokunulmaz. Bos deger bos doner."""
+    website = (website or "").strip()
+    if not website:
+        return ""
+    if not website.lower().startswith(("http://", "https://")):
+        website = "https://" + website
+    return website
 
-    Her satir bir sirket: "firma_adi;firma_web_sitesi" ya da isimsiz olarak
-    sadece "firma_web_sitesi". Web sitesi adresi olarak "acme.com",
-    "https://www.acme.com/" gibi degerler kabul edilir; domain her zaman bu
-    adresten cikarilir (bkz. extract_domain), ayrica bir domain alani
-    girilmez. Varyant tanimliysa (Ayarlar) domain'e her varyant icin bir
-    adres uretilir; tanimli degilse domain'e "info@" eklenir.
+
+def build_manual_company_rows(text, variants, existing_domains=()):
+    """Manuel sirket ekleme formundaki metni (name, email, website) satirlarina
+    cevirir.
+
+    Her satir bir sirket, format: "firma_adi;firma_web_sitesi;mail_domaini".
+    Kisayollar da desteklenir: "firma_adi;mail_domaini" (website'siz) ya da
+    tek basina "mail_domaini" (isimsiz ve website'siz). mail_domaini alanindan
+    domain her zaman extract_domain ile cikarilir (URL/www/path temizlenir).
+    Web sitesi, Sirketler sayfasinda sirket adina tiklaninca acilsin diye
+    oldugu gibi (sema eklenerek) saklanir; mail uretiminde kullanilmaz.
+
+    Varyant tanimliysa (Ayarlar) mail domain'ine her varyant icin bir adres
+    uretilir; tanimli degilse domain'e "info@" eklenir.
 
     `existing_domains`: kayitli kisilerin domain kumesi (bkz.
     database.get_existing_domains). Domain'i bu kumede olan sirket tekrar
@@ -721,7 +737,8 @@ def build_manual_company_rows(text, variants, existing_domains=()):
     (aynı toplu ekleme icinde) sadece ilk gecistigi satir islenir; bu kume
     isleme sirasinda guncellenerek sonraki satirlarda da kontrol edilir.
 
-    Returns: (rows, company_count, skipped_count, existing_count).
+    Returns: (rows, company_count, skipped_count, existing_count) where rows
+    is a list of (name, email, website) tuples.
     """
     existing_domains = {d.lower() for d in existing_domains}
     rows = []
@@ -733,19 +750,19 @@ def build_manual_company_rows(text, variants, existing_domains=()):
         if not line:
             continue
 
-        if ";" in line:
-            name, _, website = line.partition(";")
-            name = name.strip()
-            website = website.strip()
+        parts = [p.strip() for p in line.split(";")]
+        if len(parts) >= 3:
+            name, website, mail_domain = parts[0], parts[1], parts[2]
+        elif len(parts) == 2:
+            name, website, mail_domain = parts[0], "", parts[1]
         else:
-            name = ""
-            website = line
+            name, website, mail_domain = "", "", parts[0]
 
-        if not website:
+        if not mail_domain:
             skipped += 1
             continue
 
-        domain = extract_domain(website)
+        domain = extract_domain(mail_domain)
         if not domain or "." not in domain:
             skipped += 1
             continue
@@ -757,13 +774,14 @@ def build_manual_company_rows(text, variants, existing_domains=()):
 
         if not name:
             name = derive_company_name(domain)
+        website = normalize_website(website)
 
         if variants:
             emails = [f"{variant}@{domain}" for variant in variants]
         else:
             emails = [f"info@{domain}"]
 
-        rows.extend((name, email) for email in emails)
+        rows.extend((name, email, website) for email in emails)
         company_count += 1
 
     return rows, company_count, skipped, existing_count
@@ -792,7 +810,7 @@ def add_companies_page():
                 flash("Eklenecek gecerli bir satir bulunamadi.", "danger")
             return redirect(url_for("add_companies_page"))
 
-        inserted = database.import_contacts(rows)
+        inserted = database.import_contacts_with_website(rows)
         duplicates = len(rows) - inserted
         msg = f"{company_count} sirket icin {inserted} mail adresi eklendi."
         if duplicates:

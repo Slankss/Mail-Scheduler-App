@@ -92,6 +92,10 @@ def init_db():
             "ALTER TABLE contacts ADD COLUMN replied INTEGER NOT NULL DEFAULT 0"
         )
         conn.execute("ALTER TABLE contacts ADD COLUMN replied_at TEXT")
+    if "website" not in contact_cols:
+        # Sirketin web sitesi (manuel sirket eklemede girilir); Sirketler
+        # sayfasinda sirket adina tiklaninca yeni sekmede acilir.
+        conn.execute("ALTER TABLE contacts ADD COLUMN website TEXT")
     conn.commit()
     conn.close()
 
@@ -338,6 +342,34 @@ def import_contacts(rows):
     return len(to_insert)
 
 
+def import_contacts_with_website(rows):
+    """rows: list of (name, email, website) tuples.
+
+    import_contacts ile ayni dedupe kurallarina sahiptir, ayrica her kaydin
+    sirket web sitesini de yazar (manuel sirket ekleme kullanir).
+    """
+    conn = get_db_connection()
+    existing = {
+        row[0] for row in conn.execute("SELECT LOWER(TRIM(email)) FROM contacts")
+    }
+    to_insert = []
+    seen = set()
+    for name, email, website in rows:
+        key = (email or "").strip().lower()
+        if not key or key in existing or key in seen:
+            continue
+        seen.add(key)
+        to_insert.append((name, email, website))
+
+    conn.executemany(
+        "INSERT INTO contacts (name, email, website, status) VALUES (?, ?, ?, 'pending')",
+        to_insert,
+    )
+    conn.commit()
+    conn.close()
+    return len(to_insert)
+
+
 def dedupe_contacts():
     """Remove duplicate contacts that share the same email (case-insensitive).
 
@@ -521,13 +553,15 @@ def get_companies(state: str = None):
     """Group contacts by company name.
 
     Returns a list of dicts:
-    {name, contacts, total, sent, pending, failed, disabled, enabled}.
+    {name, contacts, total, sent, pending, failed, disabled, enabled, website}.
     When `state` is given, only contacts with that status are listed, and
     companies with no matching contact are excluded.
 
     `enabled` is False as soon as one of the company's contacts is disabled;
     set_company_enabled() always writes every contact of a company at once, so
-    a mixed state only shows up for hand-edited databases.
+    a mixed state only shows up for hand-edited databases. `website` is the
+    first non-empty value found among the company's contacts (manuel sirket
+    eklemede her kayda ayni web sitesi yazilir).
     """
     contacts = get_all_contacts(state)
     grouped = {}
@@ -546,6 +580,7 @@ def get_companies(state: str = None):
                 "enabled": True,
                 "replied": 0,
                 "replied_at": None,
+                "website": None,
             },
         )
         company["contacts"].append(c)
@@ -559,6 +594,8 @@ def get_companies(state: str = None):
             company["replied"] += 1
             if (c["replied_at"] or "") > (company["replied_at"] or ""):
                 company["replied_at"] = c["replied_at"]
+        if not company["website"] and c["website"]:
+            company["website"] = c["website"]
     return sorted(grouped.values(), key=lambda x: x["name"].lower())
 
 
