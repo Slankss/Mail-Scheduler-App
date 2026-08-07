@@ -707,11 +707,12 @@ def derive_company_name(domain):
 def build_manual_company_rows(text, variants, existing_domains=()):
     """Manuel sirket ekleme formundaki metni (name, email) satirlarina cevirir.
 
-    Her satir bir sirket: "Isim; domain-ya-da-mail" ya da isimsiz olarak sadece
-    "domain-ya-da-mail". Varyant tanimliysa (Ayarlar) domain'e her varyant icin
-    bir adres uretilir; boylece tek bir domain girmek yeterli olur. Varyant
-    yoksa: girilen deger zaten tam bir mail adresiyse oldugu gibi, sadece
-    domain'se "info@domain" olarak eklenir.
+    Her satir bir sirket: "firma_adi;firma_web_sitesi" ya da isimsiz olarak
+    sadece "firma_web_sitesi". Web sitesi adresi olarak "acme.com",
+    "https://www.acme.com/" gibi degerler kabul edilir; domain her zaman bu
+    adresten cikarilir (bkz. extract_domain), ayrica bir domain alani
+    girilmez. Varyant tanimliysa (Ayarlar) domain'e her varyant icin bir
+    adres uretilir; tanimli degilse domain'e "info@" eklenir.
 
     `existing_domains`: kayitli kisilerin domain kumesi (bkz.
     database.get_existing_domains). Domain'i bu kumede olan sirket tekrar
@@ -733,19 +734,18 @@ def build_manual_company_rows(text, variants, existing_domains=()):
             continue
 
         if ";" in line:
-            name, _, value = line.partition(";")
+            name, _, website = line.partition(";")
             name = name.strip()
-            value = value.strip()
+            website = website.strip()
         else:
             name = ""
-            value = line
+            website = line
 
-        if not value:
+        if not website:
             skipped += 1
             continue
 
-        has_email = "@" in value
-        domain = extract_domain(value)
+        domain = extract_domain(website)
         if not domain or "." not in domain:
             skipped += 1
             continue
@@ -760,8 +760,6 @@ def build_manual_company_rows(text, variants, existing_domains=()):
 
         if variants:
             emails = [f"{variant}@{domain}" for variant in variants]
-        elif has_email:
-            emails = [value]
         else:
             emails = [f"info@{domain}"]
 
