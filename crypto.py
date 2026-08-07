@@ -31,6 +31,16 @@ _KEY = base64.urlsafe_b64encode(hashlib.sha256(_SECRET.encode()).digest())
 _fernet = Fernet(_KEY)
 
 
+def secret_material() -> bytes:
+    """APP_SECRET_KEY'in ham hali.
+
+    Baska anahtarlar (orn. oturum cookie imzasi) bundan turetilir; ayni sirrin
+    iki farkli isde ayni bicimde kullanilmamasi icin turetim cagiran tarafta
+    yapilir.
+    """
+    return _SECRET.encode()
+
+
 def encrypt(value: str) -> str:
     """Encrypt a plaintext string for storage. Empty input stays empty."""
     if not value:
