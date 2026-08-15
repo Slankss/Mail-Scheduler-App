@@ -1,5 +1,6 @@
 import math
 import os
+import re
 import smtplib
 import unicodedata
 from datetime import datetime, timedelta
@@ -443,70 +444,68 @@ def pick_name_column(df, exclude=None):
     return None
 
 
-@app.route("/import", methods=["GET", "POST"])
-def import_page():
-    if request.method == "POST":
-        file = request.files.get("excel_file")
-        if not file or file.filename == "":
-            flash("Lutfen bir excel dosyasi secin.", "danger")
-            return redirect(url_for("import_page"))
+@app.route("/import", methods=["POST"])
+def import_excel():
+    """Excel'den toplu kisi ekler. Yukleme formu Ayarlar sayfasindadir."""
+    file = request.files.get("excel_file")
+    if not file or file.filename == "":
+        flash("Lutfen bir excel dosyasi secin.", "danger")
+        return redirect(url_for("settings_page"))
 
-        filename = secure_filename(file.filename)
-        filepath = UPLOAD_DIR / filename
-        file.save(filepath)
+    filename = secure_filename(file.filename)
+    filepath = UPLOAD_DIR / filename
+    file.save(filepath)
 
-        try:
-            df = pd.read_excel(filepath)
-        except Exception as exc:
-            flash(f"Excel okunamadi: {exc}", "danger")
-            return redirect(url_for("import_page"))
+    try:
+        df = pd.read_excel(filepath)
+    except Exception as exc:
+        flash(f"Excel okunamadi: {exc}", "danger")
+        return redirect(url_for("settings_page"))
 
-        email_col, other_email_cols = pick_email_column(df)
-        name_col = pick_name_column(df, exclude=email_col)
+    email_col, other_email_cols = pick_email_column(df)
+    name_col = pick_name_column(df, exclude=email_col)
 
-        if not email_col:
-            flash(
-                "Excel dosyasinda mail adresi iceren bir sutun bulunamadi. "
-                "Okunan sutunlar: " + ", ".join(str(c) for c in df.columns),
-                "danger",
-            )
-            return redirect(url_for("import_page"))
+    if not email_col:
+        flash(
+            "Excel dosyasinda mail adresi iceren bir sutun bulunamadi. "
+            "Okunan sutunlar: " + ", ".join(str(c) for c in df.columns),
+            "danger",
+        )
+        return redirect(url_for("settings_page"))
 
-        rows = []
-        skipped = 0
-        for _, row in df.iterrows():
-            name = cell_text(row[name_col]) if name_col else ""
-            raw = cell_text(row[email_col])
-            if not raw:
-                # Bos hucre bir hata degil, sessizce atlanir.
-                continue
+    rows = []
+    skipped = 0
+    for _, row in df.iterrows():
+        name = cell_text(row[name_col]) if name_col else ""
+        raw = cell_text(row[email_col])
+        if not raw:
+            # Bos hucre bir hata degil, sessizce atlanir.
+            continue
 
-            for email in raw.split(","):
-                email = email.strip()
-                if "@" in email:
-                    rows.append((name, email))
-                else:
-                    skipped += 1
+        for email in raw.split(","):
+            email = email.strip()
+            if "@" in email:
+                rows.append((name, email))
+            else:
+                skipped += 1
 
-        inserted = database.import_contacts(rows)
-        duplicates = len(rows) - inserted
-        # Hangi sutunlarin kullanildigi yaziliyor: yanlis sutun secildiginde
-        # kullanici bunu sonuc mesajindan hemen gorebilmeli.
-        msg = f"{inserted} kisi veritabanina eklendi."
-        msg += f" Mail sutunu: '{email_col}'."
-        msg += f" Firma sutunu: '{name_col}'." if name_col else " Firma sutunu bulunamadi."
-        if other_email_cols:
-            msg += " Adres iceren diger sutunlar kullanilmadi: " + ", ".join(
-                f"'{c}'" for c in other_email_cols
-            ) + "."
-        if duplicates:
-            msg += f" {duplicates} mail zaten kayitli oldugu icin eklenmedi."
-        if skipped:
-            msg += f" {skipped} hucrede gecerli mail bulunamadi, atlandi."
-        flash(msg, "success")
-        return redirect(url_for("contacts_page"))
-
-    return render_template("import.html")
+    inserted = database.import_contacts(rows)
+    duplicates = len(rows) - inserted
+    # Hangi sutunlarin kullanildigi yaziliyor: yanlis sutun secildiginde
+    # kullanici bunu sonuc mesajindan hemen gorebilmeli.
+    msg = f"{inserted} kisi veritabanina eklendi."
+    msg += f" Mail sutunu: '{email_col}'."
+    msg += f" Firma sutunu: '{name_col}'." if name_col else " Firma sutunu bulunamadi."
+    if other_email_cols:
+        msg += " Adres iceren diger sutunlar kullanilmadi: " + ", ".join(
+            f"'{c}'" for c in other_email_cols
+        ) + "."
+    if duplicates:
+        msg += f" {duplicates} mail zaten kayitli oldugu icin eklenmedi."
+    if skipped:
+        msg += f" {skipped} hucrede gecerli mail bulunamadi, atlandi."
+    flash(msg, "success")
+    return redirect(url_for("contacts_page"))
 
 
 @app.route("/gmail", methods=["GET", "POST"])
@@ -634,6 +633,58 @@ def contacts_page():
         total_companies=total_companies,
         total_mails=total_mails,
     )
+
+
+@app.route("/contacts/add", methods=["POST"])
+def add_company():
+    """Tek bir sirketi elle ekler (Sirketler sayfasindaki 'Sirket Ekle' popup).
+
+    Excel import'un tek satirlik karsiligidir: ayni database.import_contacts()
+    fonksiyonunu kullanir, boylece zaten kayitli adresler burada da sessizce
+    atlanir (case-insensitive).
+    """
+    name = (request.form.get("company_name") or "").strip()
+    raw = request.form.get("emails") or ""
+
+    emails = [e.strip() for e in re.split(r"[,\n]+", raw) if e.strip()]
+    valid = [e for e in emails if "@" in e]
+    invalid = len(emails) - len(valid)
+
+    if not valid:
+        flash("En az bir gecerli mail adresi girmelisiniz.", "danger")
+        return redirect(url_for("contacts_page"))
+
+    inserted = database.import_contacts([(name, email) for email in valid])
+    duplicates = len(valid) - inserted
+
+    msg = f"'{name or '(Isimsiz)'}' icin {inserted} mail adresi eklendi."
+    if duplicates:
+        msg += f" {duplicates} adres zaten kayitliydi."
+    if invalid:
+        msg += f" {invalid} gecersiz adres atlandi."
+    flash(msg, "success" if inserted else "warning")
+    return redirect(url_for("contacts_page"))
+
+
+@app.route("/contacts/send-selected", methods=["POST"])
+def send_selected_companies():
+    """Secili sirketlerin bekleyen/basarisiz maillerini hemen gonderir."""
+    data = request.get_json(silent=True) or {}
+    names = data.get("names", [])
+    if not names:
+        return jsonify({"ok": False, "error": "Sirket secilmedi."}), 400
+
+    result = sched.send_to_companies(names)
+    if result["error"]:
+        return jsonify({"ok": False, "error": result["error"]}), 400
+
+    msg = f"{result['sent']} mail gonderildi"
+    if result["failed"]:
+        msg += f", {result['failed']} basarisiz oldu"
+    if result["skipped_limit"]:
+        msg += f", gunluk limit nedeniyle {result['skipped_limit']} mail gonderilmedi"
+    msg += "."
+    return jsonify({"ok": True, "message": msg, **result})
 
 
 @app.route("/contacts/verify", methods=["POST"])
