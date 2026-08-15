@@ -1,7 +1,10 @@
 import os
+import shutil
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+
+import crypto
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -59,6 +62,14 @@ def init_db():
             path TEXT NOT NULL
         )
     """)
+    # Manuel sirket eklerken domain'e uygulanacak mail on-ekleri (ör. "info",
+    # "satis"): bir domain girildiginde her varyant icin ayri bir adres uretilir.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS mail_variants (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            prefix TEXT NOT NULL UNIQUE COLLATE NOCASE
+        )
+    """)
     # Ensure a single settings row exists
     conn.execute("INSERT OR IGNORE INTO settings (id) VALUES (1)")
     # Migration: add columns to existing databases
@@ -81,18 +92,37 @@ def init_db():
             "ALTER TABLE contacts ADD COLUMN replied INTEGER NOT NULL DEFAULT 0"
         )
         conn.execute("ALTER TABLE contacts ADD COLUMN replied_at TEXT")
+    if "website" not in contact_cols:
+        # Sirketin web sitesi (manuel sirket eklemede girilir); Sirketler
+        # sayfasinda sirket adina tiklaninca yeni sekmede acilir.
+        conn.execute("ALTER TABLE contacts ADD COLUMN website TEXT")
     conn.commit()
     conn.close()
 
 
 def get_settings():
+    """Ayarlari doner; smtp_password veritabaninda sifreli tutulur, burada
+    cozulup duz metin olarak geri verilir (SMTP/IMAP baglantisi bunu bekler).
+    """
     conn = get_db_connection()
     row = conn.execute("SELECT * FROM settings WHERE id = 1").fetchone()
     conn.close()
-    return row
+    if row is None:
+        return None
+    settings = dict(row)
+    settings["smtp_password"] = crypto.decrypt(settings["smtp_password"])
+    return settings
 
 
 def save_settings(data):
+    """Ayarlari kaydeder. smtp_password veritabaninda sifreli saklanir; formda
+    bos birakilmissa (kullanici degistirmek istememis) mevcut sifre korunur.
+    """
+    password = data["smtp_password"]
+    if not password:
+        current = get_settings()
+        password = current["smtp_password"] if current else ""
+
     conn = get_db_connection()
     conn.execute("""
         UPDATE settings SET
@@ -110,7 +140,7 @@ def save_settings(data):
         data["smtp_server"],
         data["smtp_port"],
         data["smtp_email"],
-        data["smtp_password"],
+        crypto.encrypt(password),
         data["interval_minutes"],
         data["batch_size"],
         data["subject"],
@@ -119,6 +149,90 @@ def save_settings(data):
     ))
     conn.commit()
     conn.close()
+
+
+EXPORTABLE_SETTINGS_FIELDS = (
+    "smtp_server",
+    "smtp_port",
+    "smtp_email",
+    "interval_minutes",
+    "batch_size",
+    "subject",
+    "body",
+    "daily_limit",
+)
+
+
+def export_settings():
+    """Ayarlari disa aktarim icin bir sozluk olarak doner.
+
+    smtp_password bilinerek disariya duz metin verilmez: veritabanindaki
+    sifreli hali (`smtp_password_encrypted`) aktarilir. Boylece dosya calinsa
+    bile APP_SECRET_KEY olmadan sifre okunamaz. scheduler_active,
+    scheduler_started_at ve stop_reason gibi calisma-zamani alanlari da
+    disarida birakilir; bunlar "ayar" degil, o an ki durumdur.
+    """
+    conn = get_db_connection()
+    row = conn.execute("SELECT * FROM settings WHERE id = 1").fetchone()
+    conn.close()
+    if row is None:
+        return None
+    data = {field: row[field] for field in EXPORTABLE_SETTINGS_FIELDS}
+    data["smtp_password_encrypted"] = row["smtp_password"] or ""
+    return data
+
+
+def import_settings(data):
+    """Disa aktarilmis ayarlari veritabanina yazar.
+
+    `smtp_password_encrypted` alani varsa oldugu gibi (sifreli) yazilir;
+    yoksa veya bossa mevcut sifre korunur. Boylece disa aktarilan dosya
+    yalnizca ayni APP_SECRET_KEY ile calisan bir kurulumda sifreyi kullanilir
+    halde tutar; farkli bir anahtarla ice aktarilirsa sifre cozulemez ve
+    kullanicinin sifreyi elle yeniden girmesi gerekir.
+
+    Bilinmeyen/eksik alanlar yoksayilir, boylece eski/kismi disa aktarim
+    dosyalari da ice aktarilabilir. Returns the updated settings row as dict.
+    """
+    conn = get_db_connection()
+    current = conn.execute("SELECT * FROM settings WHERE id = 1").fetchone()
+
+    def pick(field, default=None):
+        return data[field] if field in data and data[field] is not None else (
+            current[field] if current is not None else default
+        )
+
+    password_encrypted = data.get("smtp_password_encrypted")
+    if not password_encrypted:
+        password_encrypted = current["smtp_password"] if current else ""
+
+    conn.execute("""
+        UPDATE settings SET
+            smtp_server = ?,
+            smtp_port = ?,
+            smtp_email = ?,
+            smtp_password = ?,
+            interval_minutes = ?,
+            batch_size = ?,
+            subject = ?,
+            body = ?,
+            daily_limit = ?
+        WHERE id = 1
+    """, (
+        pick("smtp_server", ""),
+        pick("smtp_port", 587),
+        pick("smtp_email", ""),
+        password_encrypted,
+        pick("interval_minutes", 5),
+        pick("batch_size", 1),
+        pick("subject", ""),
+        pick("body", ""),
+        pick("daily_limit", 0),
+    ))
+    conn.commit()
+    row = conn.execute("SELECT * FROM settings WHERE id = 1").fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 def set_scheduler_active(active: bool, reason: str = None):
@@ -221,6 +335,34 @@ def import_contacts(rows):
 
     conn.executemany(
         "INSERT INTO contacts (name, email, status) VALUES (?, ?, 'pending')",
+        to_insert,
+    )
+    conn.commit()
+    conn.close()
+    return len(to_insert)
+
+
+def import_contacts_with_website(rows):
+    """rows: list of (name, email, website) tuples.
+
+    import_contacts ile ayni dedupe kurallarina sahiptir, ayrica her kaydin
+    sirket web sitesini de yazar (manuel sirket ekleme kullanir).
+    """
+    conn = get_db_connection()
+    existing = {
+        row[0] for row in conn.execute("SELECT LOWER(TRIM(email)) FROM contacts")
+    }
+    to_insert = []
+    seen = set()
+    for name, email, website in rows:
+        key = (email or "").strip().lower()
+        if not key or key in existing or key in seen:
+            continue
+        seen.add(key)
+        to_insert.append((name, email, website))
+
+    conn.executemany(
+        "INSERT INTO contacts (name, email, website, status) VALUES (?, ?, ?, 'pending')",
         to_insert,
     )
     conn.commit()
@@ -439,13 +581,15 @@ def get_companies(state: str = None):
     """Group contacts by company name.
 
     Returns a list of dicts:
-    {name, contacts, total, sent, pending, failed, disabled, enabled}.
+    {name, contacts, total, sent, pending, failed, disabled, enabled, website}.
     When `state` is given, only contacts with that status are listed, and
     companies with no matching contact are excluded.
 
     `enabled` is False as soon as one of the company's contacts is disabled;
     set_company_enabled() always writes every contact of a company at once, so
-    a mixed state only shows up for hand-edited databases.
+    a mixed state only shows up for hand-edited databases. `website` is the
+    first non-empty value found among the company's contacts (manuel sirket
+    eklemede her kayda ayni web sitesi yazilir).
     """
     contacts = get_all_contacts(state)
     grouped = {}
@@ -464,6 +608,7 @@ def get_companies(state: str = None):
                 "enabled": True,
                 "replied": 0,
                 "replied_at": None,
+                "website": None,
             },
         )
         company["contacts"].append(c)
@@ -477,6 +622,8 @@ def get_companies(state: str = None):
             company["replied"] += 1
             if (c["replied_at"] or "") > (company["replied_at"] or ""):
                 company["replied_at"] = c["replied_at"]
+        if not company["website"] and c["website"]:
+            company["website"] = c["website"]
     return sorted(grouped.values(), key=lambda x: x["name"].lower())
 
 
@@ -598,6 +745,124 @@ def delete_contacts_by_ids(ids):
     conn.commit()
     conn.close()
     return deleted
+
+
+REQUIRED_DB_TABLES = {"settings", "contacts", "schedules", "attachments"}
+
+
+def export_db_path():
+    """Tam yedek icin indirilecek ham SQLite dosyasinin yolu.
+
+    smtp_password veritabaninda zaten sifreli tutuldugu icin (bkz. crypto.py)
+    dosya oldugu gibi verilir; baska bir kurulumda ice aktarilirsa sifre
+    yalnizca ayni APP_SECRET_KEY ile cozulebilir. Yuklenen ek dosyalarin
+    kendisi (data/uploads) bu dosyaya dahil degildir, sadece isim/yol kaydi.
+    """
+    return DB_PATH
+
+
+def import_db(file_stream):
+    """Yuklenen bir SQLite dosyasiyla tum veritabaninin yerini degistirir.
+
+    Diske dokunmadan once yuklenen dosyanin okunabilir bir SQLite veritabani
+    oldugu ve beklenen tablolari icerdigi dogrulanir; boylece bozuk/yanlis bir
+    dosya calisan veritabanini bozamaz. Mevcut dosya, ice aktarim yanlis
+    cikarsa geri donulebilsin diye zaman damgali bir yedek olarak birakilir.
+    init_db() sonda cagrilir ki eski semali bir yedek de eksik kolonlarini
+    kazansin.
+
+    Returns: alinan yedegin dosya adi (onceden dosya yoksa None).
+    Raises: ValueError, dosya gecerli degilse veya beklenen tablolari
+    icermiyorsa.
+    """
+    tmp_path = DATA_DIR / f".mailer.db.upload-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    with open(tmp_path, "wb") as f:
+        shutil.copyfileobj(file_stream, f)
+
+    try:
+        conn = sqlite3.connect(tmp_path)
+        tables = {
+            row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+        conn.close()
+    except sqlite3.DatabaseError as exc:
+        tmp_path.unlink(missing_ok=True)
+        raise ValueError(f"Gecerli bir SQLite veritabani degil: {exc}")
+
+    missing = REQUIRED_DB_TABLES - tables
+    if missing:
+        tmp_path.unlink(missing_ok=True)
+        raise ValueError(
+            "Dosya beklenen formatta degil, eksik tablolar: " + ", ".join(sorted(missing))
+        )
+
+    backup_name = None
+    if DB_PATH.exists():
+        backup_name = f"mailer.db.bak-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        shutil.copy2(DB_PATH, DATA_DIR / backup_name)
+
+    shutil.move(str(tmp_path), str(DB_PATH))
+    init_db()  # eski semali bir yedek yuklenmisse eksik kolonlari ekler
+    return backup_name
+
+
+def get_existing_domains():
+    """Kayitli kisilerin mail domain'lerini kucuk harfle bir kume olarak doner.
+
+    Manuel sirket eklerken kullanilir: bir domain zaten bir kayitta varsa (hangi
+    varyantla eklenmis olursa olsun) o sirket zaten taninmis sayilir ve tekrar
+    eklenmez.
+    """
+    conn = get_db_connection()
+    rows = conn.execute("SELECT email FROM contacts").fetchall()
+    conn.close()
+    domains = set()
+    for row in rows:
+        email = (row["email"] or "").strip().lower()
+        if "@" in email:
+            domains.add(email.rsplit("@", 1)[-1])
+    return domains
+
+
+def get_mail_variants():
+    """Tanimli varyant on-eklerini doner (ör. ['info', 'satis']), ekleme sirasiyla."""
+    conn = get_db_connection()
+    rows = conn.execute("SELECT prefix FROM mail_variants ORDER BY id").fetchall()
+    conn.close()
+    return [row["prefix"] for row in rows]
+
+
+def get_mail_variant_rows():
+    """Ayarlar sayfasinda id'siyle listelemek icin (silme butonu id'yi kullanir)."""
+    conn = get_db_connection()
+    rows = conn.execute("SELECT * FROM mail_variants ORDER BY id").fetchall()
+    conn.close()
+    return rows
+
+
+def add_mail_variant(prefix):
+    """Yeni bir varyant on-eki ekler. Bos ya da zaten kayitliysa (buyuk/kucuk harf
+    fark etmeksizin) hicbir sey yapmaz. Returns: eklendiyse True."""
+    prefix = (prefix or "").strip().lower()
+    if not prefix:
+        return False
+    conn = get_db_connection()
+    try:
+        conn.execute("INSERT INTO mail_variants (prefix) VALUES (?)", (prefix,))
+        conn.commit()
+        added = True
+    except sqlite3.IntegrityError:
+        added = False
+    conn.close()
+    return added
+
+
+def delete_mail_variant(variant_id):
+    conn = get_db_connection()
+    cur = conn.execute("DELETE FROM mail_variants WHERE id = ?", (variant_id,))
+    conn.commit()
+    conn.close()
+    return cur.rowcount
 
 
 def delete_contacts_by_company_names(names):

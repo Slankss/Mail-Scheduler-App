@@ -7,6 +7,10 @@ services:
     environment:
       - DATA_DIR=/app/data
       - ZERUH_API_KEY=${ZERUH_API_KEY}
+      - APP_SECRET_KEY=${APP_SECRET_KEY}
+      - APP_USERNAME=${APP_USERNAME}
+      - APP_PASSWORD_HASH=${APP_PASSWORD_HASH}
+      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-0}
     volumes:
       - ./data:/app/data
     restart: unless-stopped

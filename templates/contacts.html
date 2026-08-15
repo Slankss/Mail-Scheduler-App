@@ -50,6 +50,7 @@
                 <form method="post" action="{{ url_for('check_replies') }}" class="js-loading"
                       data-loading-text="Kontrol ediliyor..."
                       onsubmit="return confirm('Mail atilan firmalardan gelen cevaplar Gmail\'de aranacak. Bu islem birkac dakika surebilir. Devam edilsin mi?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="dropdown-item">Geri donus kontrol et</button>
                 </form>
             </li>
@@ -62,6 +63,7 @@
             <li>
                 <form method="post" action="{{ url_for('dedupe_contacts') }}"
                       onsubmit="return confirm('Ayni maile sahip tekrar eden kayitlar silinecek (gonderilmis olan korunur). Devam edilsin mi?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="dropdown-item">Tekrar edenleri temizle</button>
                 </form>
             </li>
@@ -70,6 +72,7 @@
             <li>
                 <form method="post" action="{{ url_for('clear_contacts') }}"
                       onsubmit="return confirm('Tum kisi listesi silinecek, emin misiniz?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="dropdown-item text-danger">Listeyi temizle</button>
                 </form>
             </li>
@@ -121,6 +124,12 @@
                 <input type="checkbox" class="form-check-input company-checkbox" value="{{ company.name }}"
                        aria-label="{{ company.name }} sirketini sec">
             </div>
+            {% if company.website %}
+            <div class="d-flex align-items-center ps-2 bg-body">
+                <a href="{{ company.website }}" target="_blank" rel="noopener"
+                   class="link-secondary" title="Web sitesini yeni sekmede ac">&#128279;</a>
+            </div>
+            {% endif %}
             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                     data-bs-target="#company-{{ loop.index }}" style="width: auto; flex: 1 1 auto;">
                 <span class="me-3 fw-bold">{{ company.name }}</span>
@@ -183,23 +192,38 @@
 
 <!-- Sirket ekle modal -->
 <div class="modal fade" id="addCompanyModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <form method="post" action="{{ url_for('add_company') }}">
+  <div class="modal-dialog modal-lg">
+    <form method="post" action="{{ url_for('add_companies') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title">Sirket Ekle</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
         </div>
         <div class="modal-body">
+          <p class="text-muted small">
+            Her satira bir sirket yazin. Format: <code>firma_adi;firma_web_sitesi;mail_domaini</code>.
+            Kisa yazim da calisir: <code>firma_adi;mail_domaini</code> (website'siz) ya da tek basina
+            <code>mail_domaini</code> (isimsiz ve website'siz) yeterlidir. Domain'i zaten kayitli bir
+            sirkete ait olan satirlar atlanir.
+          </p>
+          {% if variants %}
+          <p class="text-muted small">
+            Aktif mail varyantlari:
+            {% for v in variants %}<code>{{ v }}@</code>{{ ", " if not loop.last }}{% endfor %}.
+            Her sirket icin bu varyantlarin tumuyle ayri birer mail adresi eklenir.
+            <a href="{{ url_for('settings_page') }}" target="_blank">Ayarlar'dan degistirebilirsiniz</a>.
+          </p>
+          {% else %}
+          <p class="text-muted small">
+            Henuz mail varyanti tanimlanmadi; sirketlere varsayilan olarak
+            <code>info@mail_domaini</code> eklenir.
+            <a href="{{ url_for('settings_page') }}" target="_blank">Ayarlar'dan varyant ekleyebilirsiniz</a>.
+          </p>
+          {% endif %}
           <div class="mb-3">
-            <label class="form-label" for="addCompanyName">Sirket Adi</label>
-            <input type="text" class="form-control" id="addCompanyName" name="company_name" placeholder="Ornek: Akinon">
-          </div>
-          <div class="mb-3">
-            <label class="form-label" for="addCompanyEmails">Mail Adresleri</label>
-            <textarea class="form-control" id="addCompanyEmails" name="emails" rows="4" required
-                      placeholder="ik@firma.com, kariyer@firma.com"></textarea>
-            <div class="form-text">Birden fazla adresi virgul veya yeni satirla ayirin.</div>
+            <textarea class="form-control" name="companies_text" rows="8" required
+                placeholder="Acme A.S.;https://www.acme.com;acme.com&#10;Baska Firma;baskafirma.com&#10;isimsizfirma.com"></textarea>
           </div>
         </div>
         <div class="modal-footer">

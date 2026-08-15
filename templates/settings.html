@@ -3,6 +3,7 @@
 <h2>Mail Ayarlari</h2>
 
 <form method="post" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="row mb-3">
         <div class="col-md-6">
             <label class="form-label">SMTP Sunucu</label>
@@ -21,7 +22,11 @@
         </div>
         <div class="col-md-6">
             <label class="form-label">Sifre / Uygulama Sifresi</label>
-            <input type="password" class="form-control" name="smtp_password" value="{{ settings.smtp_password or '' }}" required>
+            <input type="password" class="form-control" name="smtp_password" value=""
+                   autocomplete="new-password" spellcheck="false"
+                   placeholder="{{ '••••••••  (degistirmek icin yeni sifre girin)' if settings.smtp_password else '' }}"
+                   oncopy="return false" oncut="return false" oncontextmenu="return false">
+            <div class="form-text">Guvenlik icin kayitli sifre burada gosterilmez. Degistirmek istemiyorsaniz bos birakin.</div>
         </div>
     </div>
 
@@ -98,6 +103,7 @@
             otomatik eslenir.
         </p>
         <form method="post" action="{{ url_for('import_excel') }}" enctype="multipart/form-data" class="d-flex align-items-center gap-2 flex-wrap">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="file" class="form-control" style="max-width: 22rem;" name="excel_file" accept=".xlsx,.xls" required>
             <button type="submit" class="btn btn-primary">Yukle ve Import Et</button>
         </form>
@@ -148,5 +154,105 @@ document.addEventListener("DOMContentLoaded", function () {
     Gmail kullaniyorsaniz normal sifre yerine
     <a href="https://myaccount.google.com/apppasswords" target="_blank">Uygulama Sifresi (App Password)</a>
     olusturup onu girmeniz gerekir. SMTP sunucu: smtp.gmail.com, Port: 587
+</div>
+
+<hr class="my-4">
+
+<h2>Mail Varyantlari</h2>
+<p class="text-muted small mb-3">
+    <a href="{{ url_for('contacts_page') }}">Sirketler sayfasindaki "Sirket Ekle"</a> popup'unda sadece
+    bir domain girildiginde, asagidaki varyantlarin her biri icin ayri bir mail adresi olusturulur
+    (ör. varyant <code>info</code> + domain <code>acme.com</code> -&gt; <code>info@acme.com</code>).
+    Hicbir varyant tanimlanmazsa domain'e varsayilan olarak <code>info@</code> eklenir.
+</p>
+<div class="row g-4 mb-2">
+    <div class="col-md-6">
+        <form method="post" action="{{ url_for('add_variant') }}" class="d-flex gap-2 mb-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="text" class="form-control" name="prefix" placeholder="ör. info, satis, iletisim" required>
+            <button type="submit" class="btn btn-outline-primary text-nowrap">+ Ekle</button>
+        </form>
+        {% if variants %}
+        <ul class="list-group">
+            {% for v in variants %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span><code>{{ v.prefix }}@...</code></span>
+                <form method="post" action="{{ url_for('delete_variant', variant_id=v.id) }}"
+                      onsubmit="return confirm('&quot;{{ v.prefix }}&quot; varyanti silinsin mi?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-danger btn-sm">Sil</button>
+                </form>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted small">Henuz varyant eklenmedi.</p>
+        {% endif %}
+    </div>
+</div>
+
+<hr class="my-4">
+
+<h2>Ayarlari Ice/Disa Aktar</h2>
+<div class="row g-4">
+    <div class="col-md-6">
+        <h5 class="h6">Disa Aktar</h5>
+        <p class="text-muted small mb-2">
+            Mevcut ayarlari (SMTP, gonderim araligi, konu/icerik, gunluk limit vb.)
+            bir JSON dosyasi olarak indirir. Sifre alani sifreli haliyle aktarilir;
+            baska bir kurulumda ice aktarilirsa sadece ayni APP_SECRET_KEY ile
+            cozulebilir.
+        </p>
+        <a href="{{ url_for('settings_export') }}" class="btn btn-outline-primary">
+            ⬇ Ayarlari Disa Aktar
+        </a>
+    </div>
+    <div class="col-md-6">
+        <h5 class="h6">Ice Aktar</h5>
+        <p class="text-muted small mb-2">
+            Daha once disa aktarilmis bir JSON dosyasini yukleyin. Mevcut ayarlarin
+            uzerine yazilir.
+        </p>
+        <form method="post" action="{{ url_for('settings_import') }}" enctype="multipart/form-data"
+              class="d-flex gap-2 align-items-start flex-wrap"
+              onsubmit="return confirm('Mevcut ayarlarin uzerine yazilacak. Devam edilsin mi?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="file" name="settings_file" accept="application/json,.json" class="form-control" style="max-width: 320px;" required>
+            <button type="submit" class="btn btn-outline-secondary">⬆ Ice Aktar</button>
+        </form>
+    </div>
+</div>
+
+<hr class="my-4">
+
+<h2>Veritabanini Ice/Disa Aktar</h2>
+<div class="row g-4">
+    <div class="col-md-6">
+        <h5 class="h6">Disa Aktar</h5>
+        <p class="text-muted small mb-2">
+            Tum veritabanini (ayarlar, kisi listesi, zamanlamalar, ek dosya kayitlari)
+            tek bir SQLite dosyasi olarak indirir - tam yedek/tasima icindir. Yuklenen
+            ek dosyalarin kendisi (data/uploads) dahil degildir, sadece isim/yol kaydi.
+        </p>
+        <a href="{{ url_for('db_export') }}" class="btn btn-outline-primary">
+            ⬇ Veritabanini Disa Aktar
+        </a>
+    </div>
+    <div class="col-md-6">
+        <h5 class="h6">Ice Aktar</h5>
+        <p class="text-muted small mb-2">
+            Daha once disa aktarilmis bir .db dosyasini yukleyin.
+            <strong>Mevcut kisi listesi ve ayarlarin tamamen yerini alir</strong>
+            (eski veritabani otomatik yedeklenir). Otomatik gonderim calisiyorsa
+            durdurulur.
+        </p>
+        <form method="post" action="{{ url_for('db_import') }}" enctype="multipart/form-data"
+              class="d-flex gap-2 align-items-start flex-wrap"
+              onsubmit="return confirm('Mevcut veritabaninin (kisi listesi dahil) tamamen uzerine yazilacak. Devam edilsin mi?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="file" name="db_file" accept=".db,application/x-sqlite3" class="form-control" style="max-width: 320px;" required>
+            <button type="submit" class="btn btn-outline-danger">⬆ Ice Aktar</button>
+        </form>
+    </div>
 </div>
 {% endblock %}

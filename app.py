@@ -1,14 +1,27 @@
+import hashlib
+import json
 import math
 import os
-import re
 import smtplib
 import unicodedata
 from datetime import datetime, timedelta
 
 import pandas as pd
-from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
+from flask import (
+    Flask,
+    Response,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    url_for,
+)
 from werkzeug.utils import secure_filename
 
+import auth
+import crypto
 import database
 import gmail_client
 import mailer
@@ -18,12 +31,123 @@ import verifier
 UPLOAD_DIR = database.DATA_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
+# Kimlik bilgileri eksikse uygulama hic acilmaz: korumasiz bir panelin ayakta
+# olmasindansa acilista hata vermek yeglenir.
+auth.check_config()
+
 app = Flask(__name__)
-app.secret_key = "mail-scheduler-secret-key"
+# Oturum cookie'sinin imza anahtari .env'deki APP_SECRET_KEY'den turetilir
+# (sifreleme anahtarindan farkli bir turetim, ayni sir iki ise ayni bicimde
+# girmesin diye). Sabit bir anahtar kodda tutulmaz: bilen herkes gecerli
+# oturum cookie'si uretebilirdi.
+app.secret_key = hashlib.sha256(b"session:" + crypto.secret_material()).digest()
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,   # JavaScript cookie'yi okuyamaz
+    SESSION_COOKIE_SAMESITE="Lax",  # baska siteden gelen POST'lar cookie tasimaz
+    # HTTPS arkasinda calisirken .env'de SESSION_COOKIE_SECURE=1 yapin; localhost
+    # (http) icin acik birakilirsa oturum hic kurulamaz.
+    SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE", "0") == "1",
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=2),  # bosta kalma suresi
+    SESSION_REFRESH_EACH_REQUEST=True,
+)
 
 database.init_db()
 # APScheduler isleri bellekte durur; kayitli zamanlamalar her acilista kurulur.
 sched.restore_schedules()
+
+# Girise izin verilen tek uclar. Liste "izin verilenler" seklinde tutulur:
+# yeni bir route eklendiginde varsayilan olarak korumali olur, korumasiz degil.
+PUBLIC_ENDPOINTS = {"login", "static"}
+
+
+@app.before_request
+def require_login():
+    """Her istekten once oturum ve CSRF kontrolu.
+
+    Tek tek route'lara dekorator koymak yerine global bir filtre kullanilir:
+    ileride eklenecek bir ucun korumasiz kalmasi mumkun olmasin diye.
+    """
+    if request.endpoint in PUBLIC_ENDPOINTS:
+        return None
+
+    if not auth.is_logged_in():
+        return auth.deny()
+
+    # Oturum acikken de CSRF gerekir: baska bir sitedeki form/istek, tarayicidaki
+    # gecerli oturumu kullanarak mail gonderimi baslatmasin.
+    if auth.needs_csrf_check() and not auth.csrf_ok():
+        if auth.wants_json():
+            return jsonify({"error": "Gecersiz ya da eksik CSRF token."}), 400
+        flash("Guvenlik dogrulamasi basarisiz (CSRF). Sayfayi yenileyip tekrar deneyin.", "danger")
+        return redirect(url_for("index"))
+
+    return None
+
+
+@app.context_processor
+def inject_auth():
+    """Sablonlarda csrf_token() ve current_user kullanilabilsin."""
+    return {"csrf_token": auth.csrf_token, "current_user": auth.current_user()}
+
+
+@app.after_request
+def security_headers(response):
+    """Temel tarayici korumalari."""
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")  # clickjacking
+    response.headers.setdefault("Referrer-Policy", "same-origin")
+    return response
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if auth.is_logged_in():
+        return redirect(url_for("index"))
+
+    if request.method == "POST":
+        # Giris formu de CSRF token tasir: baska bir site, kullaniciyi farkinda
+        # olmadan kendi belirledigi bir hesaba giris yaptiramasin.
+        if not auth.csrf_ok():
+            flash("Oturum dogrulanamadi. Sayfayi yenileyip tekrar deneyin.", "danger")
+            return render_template("login.html"), 400
+
+        locked = auth.lockout_remaining()
+        if locked:
+            flash(
+                f"Cok fazla hatali deneme. {locked // 60 + 1} dakika sonra tekrar deneyin.",
+                "danger",
+            )
+            return render_template("login.html"), 429
+
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
+
+        if auth.verify_credentials(username, password):
+            auth.reset_failures()
+            auth.login_user(username.strip())
+            target = auth.safe_next_target(request.args.get("next", ""))
+            return redirect(target or url_for("index"))
+
+        locked = auth.record_failure()
+        # Hangi alanin yanlis oldugu soylenmez: kullanici adi tahmini
+        # kolaylasmasin.
+        if locked:
+            flash(
+                f"Cok fazla hatali deneme. Giris {locked // 60 + 1} dakika kilitlendi.",
+                "danger",
+            )
+        else:
+            flash("Kullanici adi ya da sifre hatali.", "danger")
+        return render_template("login.html"), 401
+
+    return render_template("login.html")
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    auth.logout_user()
+    flash("Cikis yapildi.", "info")
+    return redirect(url_for("login"))
 
 
 def compute_progress():
@@ -218,7 +342,10 @@ def settings_page():
 
     settings = database.get_settings()
     attachments = database.get_attachments()
-    return render_template("settings.html", settings=settings, attachments=attachments)
+    variants = database.get_mail_variant_rows()
+    return render_template(
+        "settings.html", settings=settings, attachments=attachments, variants=variants
+    )
 
 
 @app.route("/settings/test", methods=["POST"])
@@ -287,6 +414,23 @@ def settings_test_connection():
     return jsonify({"ok": all(c["ok"] for c in checks if c["ok"] is not None), "checks": checks})
 
 
+@app.route("/settings/variants/add", methods=["POST"])
+def add_variant():
+    prefix = request.form.get("prefix", "")
+    if database.add_mail_variant(prefix):
+        flash(f"'{prefix.strip().lower()}' varyant olarak eklendi.", "success")
+    else:
+        flash("Varyant eklenemedi (bos birakilmis olabilir ya da zaten kayitli).", "warning")
+    return redirect(url_for("settings_page"))
+
+
+@app.route("/settings/variants/<int:variant_id>/delete", methods=["POST"])
+def delete_variant(variant_id):
+    if database.delete_mail_variant(variant_id):
+        flash("Varyant silindi.", "warning")
+    return redirect(url_for("settings_page"))
+
+
 @app.route("/attachments/<int:attachment_id>/delete", methods=["POST"])
 def delete_attachment(attachment_id):
     attachment = database.get_attachment(attachment_id)
@@ -298,6 +442,112 @@ def delete_attachment(attachment_id):
         database.delete_attachment(attachment_id)
         flash("Ek silindi.", "warning")
     return redirect(url_for("settings_page"))
+
+
+@app.route("/settings/export", methods=["GET"])
+def settings_export():
+    """Ayarlari JSON dosyasi olarak indirir.
+
+    smtp_password sifreli haliyle aktarilir (bkz. database.export_settings);
+    ancak dosyayi baska bir kurulumda ice aktarirken APP_SECRET_KEY farkliysa
+    sifre cozulemez, kullanici sifreyi elle girmelidir.
+    """
+    data = database.export_settings()
+    payload = {
+        "type": "mail-scheduler-settings",
+        "version": 1,
+        "exported_at": datetime.now().isoformat(timespec="seconds"),
+        "settings": data or {},
+    }
+    body = json.dumps(payload, indent=2, ensure_ascii=False)
+    filename = f"mail-scheduler-settings-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"
+    return Response(
+        body,
+        mimetype="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.route("/settings/import", methods=["POST"])
+def settings_import():
+    """Daha once /settings/export ile indirilmis bir JSON dosyasini ice aktarir."""
+    upload = request.files.get("settings_file")
+    if not upload or not upload.filename:
+        flash("Ice aktarmak icin bir dosya secin.", "danger")
+        return redirect(url_for("settings_page"))
+
+    try:
+        payload = json.load(upload.stream)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        flash("Dosya gecerli bir JSON degil.", "danger")
+        return redirect(url_for("settings_page"))
+
+    settings_data = payload.get("settings") if isinstance(payload, dict) else None
+    if not isinstance(settings_data, dict):
+        flash("Dosya beklenen formatta degil (settings alani bulunamadi).", "danger")
+        return redirect(url_for("settings_page"))
+
+    database.import_settings(settings_data)
+
+    if sched.is_running():
+        sched.start()  # reschedule with the imported interval
+
+    flash("Ayarlar ice aktarildi.", "success")
+    return redirect(url_for("settings_page"))
+
+
+@app.route("/db/export", methods=["GET"])
+def db_export():
+    """Tum veritabanini (ayarlar, kisiler, zamanlamalar, ek dosya kayitlari)
+    ham SQLite dosyasi olarak indirir.
+
+    Ayarlar disa aktarimindan (/settings/export) farki: o sadece ayarlari JSON
+    olarak verir, bu ise kisi listesi ve zamanlamalar dahil her seyi tasir -
+    tam yedek/tasima icin kullanilir. Yuklenen ek dosyalarin kendisi (data/uploads)
+    dahil degildir, sadece isim/yol kaydi.
+    """
+    filename = f"mail-scheduler-db-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
+    return send_file(
+        database.export_db_path(),
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/x-sqlite3",
+    )
+
+
+@app.route("/db/import", methods=["POST"])
+def db_import():
+    """Daha once /db/export ile indirilmis bir SQLite dosyasini ice aktarir.
+
+    Otomatik gonderim calisiyorsa once durdurulur: ice aktarilan veri farkli
+    bir kisi listesi/ayar tasiyabilir, kullanicinin yeni durumu gormeden
+    gonderimin devam etmesi istenmez. Bellekteki zamanlanmis isler de
+    sched.reset() ile yeni veritabanindan yeniden kurulur.
+    """
+    upload = request.files.get("db_file")
+    if not upload or not upload.filename:
+        flash("Ice aktarmak icin bir dosya secin.", "danger")
+        return redirect(url_for("settings_page"))
+
+    was_running = sched.is_running()
+    if was_running:
+        sched.stop()
+
+    try:
+        backup_name = database.import_db(upload.stream)
+    except ValueError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("settings_page"))
+
+    sched.reset()
+
+    msg = "Veritabani ice aktarildi."
+    if backup_name:
+        msg += f" Onceki veritabani '{backup_name}' olarak yedeklendi."
+    if was_running:
+        msg += " Otomatik gonderim guvenlik icin durduruldu, kontrol edip isterseniz tekrar baslatin."
+    flash(msg, "warning" if was_running else "success")
+    return redirect(url_for("index"))
 
 
 @app.route("/start", methods=["POST"])
@@ -508,6 +758,148 @@ def import_excel():
     return redirect(url_for("contacts_page"))
 
 
+def extract_domain(value):
+    """"acme.com", "https://www.acme.com/", "info@acme.com" -> "acme.com"."""
+    value = value.strip().lower()
+    if "@" in value:
+        value = value.rsplit("@", 1)[-1]
+    for prefix in ("https://", "http://"):
+        if value.startswith(prefix):
+            value = value[len(prefix):]
+    if value.startswith("www."):
+        value = value[4:]
+    value = value.split("/")[0]
+    return value.strip(".")
+
+
+def derive_company_name(domain):
+    """"acme-corp.com" -> "Acme Corp". Sirket ismi verilmediginde kullanilir."""
+    label = domain.split(".")[0] if domain else ""
+    label = label.replace("-", " ").replace("_", " ").strip()
+    return label.title()
+
+
+def normalize_website(website):
+    """Sirketler sayfasinda tiklanabilir link olarak kullanilabilsin diye
+    web sitesi adresine sema ekler ("acme.com" -> "https://acme.com").
+    Zaten http(s):// ile basliyorsa dokunulmaz. Bos deger bos doner."""
+    website = (website or "").strip()
+    if not website:
+        return ""
+    if not website.lower().startswith(("http://", "https://")):
+        website = "https://" + website
+    return website
+
+
+def build_manual_company_rows(text, variants, existing_domains=()):
+    """Manuel sirket ekleme formundaki metni (name, email, website) satirlarina
+    cevirir.
+
+    Her satir bir sirket, format: "firma_adi;firma_web_sitesi;mail_domaini".
+    Kisayollar da desteklenir: "firma_adi;mail_domaini" (website'siz) ya da
+    tek basina "mail_domaini" (isimsiz ve website'siz). mail_domaini alanindan
+    domain her zaman extract_domain ile cikarilir (URL/www/path temizlenir).
+    Web sitesi, Sirketler sayfasinda sirket adina tiklaninca acilsin diye
+    oldugu gibi (sema eklenerek) saklanir; mail uretiminde kullanilmaz.
+
+    Varyant tanimliysa (Ayarlar) mail domain'ine her varyant icin bir adres
+    uretilir; tanimli degilse domain'e "info@" eklenir.
+
+    `existing_domains`: kayitli kisilerin domain kumesi (bkz.
+    database.get_existing_domains). Domain'i bu kumede olan sirket tekrar
+    eklenmez: sirket zaten taniniyor sayilir, tek tek mail adresi eslestirmesi
+    yapilmaz. Ayni domain metnin icinde birden fazla satirda geçiyorsa da
+    (aynı toplu ekleme icinde) sadece ilk gecistigi satir islenir; bu kume
+    isleme sirasinda guncellenerek sonraki satirlarda da kontrol edilir.
+
+    Returns: (rows, company_count, skipped_count, existing_count) where rows
+    is a list of (name, email, website) tuples.
+    """
+    existing_domains = {d.lower() for d in existing_domains}
+    rows = []
+    company_count = 0
+    skipped = 0
+    existing_count = 0
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        parts = [p.strip() for p in line.split(";")]
+        if len(parts) >= 3:
+            name, website, mail_domain = parts[0], parts[1], parts[2]
+        elif len(parts) == 2:
+            name, website, mail_domain = parts[0], "", parts[1]
+        else:
+            name, website, mail_domain = "", "", parts[0]
+
+        if not mail_domain:
+            skipped += 1
+            continue
+
+        domain = extract_domain(mail_domain)
+        if not domain or "." not in domain:
+            skipped += 1
+            continue
+
+        if domain in existing_domains:
+            existing_count += 1
+            continue
+        existing_domains.add(domain)
+
+        if not name:
+            name = derive_company_name(domain)
+        website = normalize_website(website)
+
+        if variants:
+            emails = [f"{variant}@{domain}" for variant in variants]
+        else:
+            emails = [f"info@{domain}"]
+
+        rows.extend((name, email, website) for email in emails)
+        company_count += 1
+
+    return rows, company_count, skipped, existing_count
+
+
+@app.route("/companies/add", methods=["POST"])
+def add_companies():
+    """Excel yuklemeden, elle tek ya da bir liste sirket eklemek icin.
+
+    Ayri bir sayfa yerine Sirketler sayfasindaki "Sirket Ekle" popup'undan
+    (bkz. templates/contacts.html) doldurulur.
+    """
+    variants = database.get_mail_variants()
+    text = request.form.get("companies_text", "")
+    existing_domains = database.get_existing_domains()
+    rows, company_count, skipped, existing_count = build_manual_company_rows(
+        text, variants, existing_domains
+    )
+
+    if not rows:
+        if existing_count:
+            flash(
+                f"Girilen {existing_count} sirketin domaini zaten kayitli, "
+                "tekrar eklenmedi.",
+                "warning",
+            )
+        else:
+            flash("Eklenecek gecerli bir satir bulunamadi.", "danger")
+        return redirect(url_for("contacts_page"))
+
+    inserted = database.import_contacts_with_website(rows)
+    duplicates = len(rows) - inserted
+    msg = f"{company_count} sirket icin {inserted} mail adresi eklendi."
+    if duplicates:
+        msg += f" {duplicates} adres zaten kayitli oldugu icin eklenmedi."
+    if existing_count:
+        msg += f" {existing_count} sirketin domaini zaten kayitli oldugu icin atlandi."
+    if skipped:
+        msg += f" {skipped} satir okunamadi, atlandi."
+    flash(msg, "success" if inserted else "warning")
+    return redirect(url_for("contacts_page"))
+
+
 @app.route("/gmail", methods=["GET", "POST"])
 def gmail_page():
     """Gmail'de sorgu calistirip yazisilmis sirketleri onizler.
@@ -632,38 +1024,8 @@ def contacts_page():
         replied_companies=replied_companies,
         total_companies=total_companies,
         total_mails=total_mails,
+        variants=database.get_mail_variants(),
     )
-
-
-@app.route("/contacts/add", methods=["POST"])
-def add_company():
-    """Tek bir sirketi elle ekler (Sirketler sayfasindaki 'Sirket Ekle' popup).
-
-    Excel import'un tek satirlik karsiligidir: ayni database.import_contacts()
-    fonksiyonunu kullanir, boylece zaten kayitli adresler burada da sessizce
-    atlanir (case-insensitive).
-    """
-    name = (request.form.get("company_name") or "").strip()
-    raw = request.form.get("emails") or ""
-
-    emails = [e.strip() for e in re.split(r"[,\n]+", raw) if e.strip()]
-    valid = [e for e in emails if "@" in e]
-    invalid = len(emails) - len(valid)
-
-    if not valid:
-        flash("En az bir gecerli mail adresi girmelisiniz.", "danger")
-        return redirect(url_for("contacts_page"))
-
-    inserted = database.import_contacts([(name, email) for email in valid])
-    duplicates = len(valid) - inserted
-
-    msg = f"'{name or '(Isimsiz)'}' icin {inserted} mail adresi eklendi."
-    if duplicates:
-        msg += f" {duplicates} adres zaten kayitliydi."
-    if invalid:
-        msg += f" {invalid} gecersiz adres atlandi."
-    flash(msg, "success" if inserted else "warning")
-    return redirect(url_for("contacts_page"))
 
 
 @app.route("/contacts/send-selected", methods=["POST"])
