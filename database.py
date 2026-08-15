@@ -438,6 +438,34 @@ def get_sendable_contacts(limit):
     return rows
 
 
+def get_sendable_contacts_by_companies(names):
+    """Verilen sirketlerin gonderilebilir (failed/pending, enabled) kisilerini dondurur.
+
+    Sirketler sayfasindaki toplu "Secilenlere mail gonder" aksiyonu icindir.
+    get_sendable_contacts()'tan farkli olarak bir limit almaz: secilen
+    sirketlerin tum gonderilebilir mailleri hedeflenir, limit cagiran tarafta
+    (scheduler.send_to_companies) uygulanir. get_companies() bos ismi
+    "(Isimsiz)" olarak gosterdigi icin o placeholder burada bos stringe
+    cevrilir.
+    """
+    if not names:
+        return []
+    conn = get_db_connection()
+    real_names = ["" if n == "(Isimsiz)" else n for n in names]
+    placeholders = ",".join("?" for _ in real_names)
+    rows = conn.execute(
+        f"""
+        SELECT * FROM contacts
+        WHERE status IN ('failed', 'pending') AND enabled = 1
+          AND TRIM(COALESCE(name, '')) IN ({placeholders})
+        ORDER BY CASE status WHEN 'failed' THEN 0 ELSE 1 END, id
+        """,
+        real_names,
+    ).fetchall()
+    conn.close()
+    return rows
+
+
 def count_sent_today():
     """Number of mails marked sent today (based on local date)."""
     conn = get_db_connection()

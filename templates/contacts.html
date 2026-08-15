@@ -10,13 +10,24 @@
         <h2 class="mb-0">Sirketler</h2>
         <span class="text-muted">Toplam <strong>{{ total_companies }}</strong> sirket &middot; <strong>{{ total_mails }}</strong> mail</span>
     </div>
-    <div class="dropdown">
+    <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addCompanyModal">
+            + Sirket Ekle
+        </button>
+        <div class="dropdown">
         <button type="button" id="actionsBtn" class="btn btn-primary dropdown-toggle"
                 data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
             Aksiyonlar
         </button>
         <ul class="dropdown-menu dropdown-menu-end shadow" style="min-width: 17rem;">
             <li><h6 class="dropdown-header">Secili sirketler (<span id="selectedCount">0</span>)</h6></li>
+            <li>
+                <button type="button" id="sendSelectedBtn" class="dropdown-item" disabled>
+                    <span id="sendSelectedSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                    <span id="sendSelectedBtnText">Secilenlere mail gonder</span>
+                    <span class="text-muted small">&mdash; bekleyen/basarisiz mailler</span>
+                </button>
+            </li>
             <li>
                 <button type="button" id="enableSelectedBtn" class="dropdown-item" disabled>
                     Aktif et <span class="text-muted small">&mdash; tekrar mail gonderilir</span>
@@ -66,6 +77,7 @@
                 </form>
             </li>
         </ul>
+        </div>
     </div>
 </div>
 
@@ -178,6 +190,51 @@
     {% endfor %}
 </div>
 
+<!-- Sirket ekle modal -->
+<div class="modal fade" id="addCompanyModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <form method="post" action="{{ url_for('add_companies') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Sirket Ekle</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small">
+            Her satira bir sirket yazin. Format: <code>firma_adi;firma_web_sitesi;mail_domaini</code>.
+            Kisa yazim da calisir: <code>firma_adi;mail_domaini</code> (website'siz) ya da tek basina
+            <code>mail_domaini</code> (isimsiz ve website'siz) yeterlidir. Domain'i zaten kayitli bir
+            sirkete ait olan satirlar atlanir.
+          </p>
+          {% if variants %}
+          <p class="text-muted small">
+            Aktif mail varyantlari:
+            {% for v in variants %}<code>{{ v }}@</code>{{ ", " if not loop.last }}{% endfor %}.
+            Her sirket icin bu varyantlarin tumuyle ayri birer mail adresi eklenir.
+            <a href="{{ url_for('settings_page') }}" target="_blank">Ayarlar'dan degistirebilirsiniz</a>.
+          </p>
+          {% else %}
+          <p class="text-muted small">
+            Henuz mail varyanti tanimlanmadi; sirketlere varsayilan olarak
+            <code>info@mail_domaini</code> eklenir.
+            <a href="{{ url_for('settings_page') }}" target="_blank">Ayarlar'dan varyant ekleyebilirsiniz</a>.
+          </p>
+          {% endif %}
+          <div class="mb-3">
+            <textarea class="form-control" name="companies_text" rows="8" required
+                placeholder="Acme A.S.;https://www.acme.com;acme.com&#10;Baska Firma;baskafirma.com&#10;isimsizfirma.com"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgec</button>
+          <button type="submit" class="btn btn-primary">Ekle</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- Mail kontrol sonuc modal -->
 <div class="modal fade" id="checkResultModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-scrollable">
@@ -250,6 +307,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const deleteSelectedBtn = document.getElementById("deleteSelectedBtn");
     const enableSelectedBtn = document.getElementById("enableSelectedBtn");
     const disableSelectedBtn = document.getElementById("disableSelectedBtn");
+    const sendSelectedBtn = document.getElementById("sendSelectedBtn");
     const selectedCountSpan = document.getElementById("selectedCount");
     const selectAllCheckbox = document.getElementById("selectAllCompanies");
 
@@ -264,6 +322,7 @@ document.addEventListener("DOMContentLoaded", function () {
         deleteSelectedBtn.disabled = count === 0;
         enableSelectedBtn.disabled = count === 0;
         disableSelectedBtn.disabled = count === 0;
+        sendSelectedBtn.disabled = count === 0;
     }
 
     document.querySelectorAll(".company-checkbox").forEach(function (cb) {
@@ -321,6 +380,42 @@ document.addEventListener("DOMContentLoaded", function () {
                 toggle.disabled = false;
             }
         });
+    });
+
+    // --- Secilenlere mail gonder ---
+    const sendSelectedSpinner = document.getElementById("sendSelectedSpinner");
+    const sendSelectedBtnText = document.getElementById("sendSelectedBtnText");
+
+    sendSelectedBtn.addEventListener("click", async function () {
+        const selected = selectedNames();
+        if (selected.length === 0) return;
+        if (!confirm(
+            selected.length + " sirketin bekleyen/basarisiz mailleri simdi gonderilecek. Devam edilsin mi?"
+        )) return;
+
+        sendSelectedBtn.disabled = true;
+        sendSelectedSpinner.classList.remove("d-none");
+        sendSelectedBtnText.textContent = "Gonderiliyor...";
+        setActionsBusy("Gonderiliyor...");
+        try {
+            const resp = await fetch("{{ url_for('send_selected_companies') }}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ names: selected }),
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.ok) throw new Error(data.error || ("HTTP " + resp.status));
+            alert(data.message);
+            window.location.reload();
+        } catch (e) {
+            alert("Gonderim yapilamadi: " + e.message);
+            sendSelectedBtn.disabled = false;
+            sendSelectedSpinner.classList.add("d-none");
+            sendSelectedBtnText.textContent = "Secilenlere mail gonder";
+            actionsBtn.disabled = false;
+            actionsBtn.classList.add("dropdown-toggle");
+            actionsBtn.textContent = "Aksiyonlar";
+        }
     });
 
     [[enableSelectedBtn, true], [disableSelectedBtn, false]].forEach(function (pair) {

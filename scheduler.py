@@ -78,6 +78,57 @@ def send_batch():
         stop(_limit_reason(settings))
 
 
+def send_to_companies(names):
+    """Secilen sirketlerin bekleyen/basarisiz maillerini hemen gonderir.
+
+    Sirketler sayfasindaki toplu "Secilenlere mail gonder" aksiyonu bunu
+    kullanir. send_batch()'ten farkli olarak batch_size ile sinirlamaz:
+    secilen sirketlerin gonderilebilir tum mailleri tek seferde islenir.
+    Gunluk limit yine de gecerlidir; scheduler calisiyorsa ve bu gonderim
+    limiti doldurursa bir sonraki tur send_batch() zaten kendini durdurur,
+    bu yuzden burada ayrica stop() cagirmaya gerek yok.
+
+    Returns: dict(sent, failed, skipped_limit, error). `error` doluysa hic
+    mail gonderilmemistir.
+    """
+    settings = database.get_settings()
+    if not settings or not settings["smtp_email"] or not settings["smtp_password"]:
+        return {"sent": 0, "failed": 0, "skipped_limit": 0,
+                "error": "Once mail ayarlarini girmelisiniz."}
+
+    if daily_limit_reached(settings):
+        return {"sent": 0, "failed": 0, "skipped_limit": 0, "error": _limit_reason(settings)}
+
+    contacts = database.get_sendable_contacts_by_companies(names)
+
+    daily_limit = settings["daily_limit"] or 0
+    skipped_limit = 0
+    if daily_limit > 0:
+        remaining = daily_limit - database.count_sent_today()
+        if len(contacts) > remaining:
+            skipped_limit = len(contacts) - remaining
+            contacts = contacts[:remaining]
+
+    attachments = [a["path"] for a in database.get_attachments()]
+    sent = failed = 0
+    for contact in contacts:
+        try:
+            send_email(
+                settings,
+                contact["email"],
+                settings["subject"],
+                settings["body"],
+                attachments=attachments,
+            )
+            database.mark_contact_sent(contact["id"])
+            sent += 1
+        except Exception:
+            database.mark_contact_failed(contact["id"])
+            failed += 1
+
+    return {"sent": sent, "failed": failed, "skipped_limit": skipped_limit, "error": None}
+
+
 def start():
     settings = database.get_settings()
     interval = settings["interval_minutes"] or 5
