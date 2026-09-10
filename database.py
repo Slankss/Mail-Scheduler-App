@@ -10,6 +10,10 @@ DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "mailer.db"
 
+# Etiketi olmayan sirketlere gonderilen varsayilan sablonun adi. Bu sablon
+# init_db() tarafindan olusturulur ve silinemez; adi degistirilebilir.
+GENERAL_TEMPLATE_NAME = "Genel"
+
 
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
@@ -70,6 +74,29 @@ def init_db():
             prefix TEXT NOT NULL UNIQUE COLLATE NOCASE
         )
     """)
+    # Mail sablonlari: her birinin kendi konusu, icerigi ve ekleri vardir.
+    # is_general = 1 olan tek sablon, etiketi olmayan sirketler icin kullanilir
+    # ve silinemez (bkz. delete_mail_template).
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS mail_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            subject TEXT NOT NULL DEFAULT '',
+            body TEXT NOT NULL DEFAULT '',
+            is_general INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+    """)
+    # Etiketler: her etiketin bir mail sablonu olmak ZORUNDA (template_id NOT
+    # NULL). Bir sirkete etiket atandiginda o etiketin sablonu kullanilir.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS tags (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            template_id INTEGER NOT NULL REFERENCES mail_templates(id),
+            created_at TEXT NOT NULL
+        )
+    """)
     # Ensure a single settings row exists
     conn.execute("INSERT OR IGNORE INTO settings (id) VALUES (1)")
     # Migration: add columns to existing databases
@@ -96,6 +123,42 @@ def init_db():
         # Sirketin web sitesi (manuel sirket eklemede girilir); Sirketler
         # sayfasinda sirket adina tiklaninca yeni sekmede acilir.
         conn.execute("ALTER TABLE contacts ADD COLUMN website TEXT")
+    if "priority" not in contact_cols:
+        # Oncelikli sirket: gonderim sirasinda one alinir (bkz.
+        # get_sendable_contacts). Etiket gibi sirket bazinda yonetilir.
+        conn.execute(
+            "ALTER TABLE contacts ADD COLUMN priority INTEGER NOT NULL DEFAULT 0"
+        )
+    if "tag_id" not in contact_cols:
+        # Sirketin etiketi. `enabled` ve `website` gibi kisi satirinda tutulur
+        # ama sirket bazinda yonetilir: set_company_tag() bir sirketin TUM
+        # kayitlarina ayni degeri yazar, boylece bir sirketin ayni anda birden
+        # fazla etiketi olamaz.
+        conn.execute("ALTER TABLE contacts ADD COLUMN tag_id INTEGER")
+    attachment_cols = {row["name"] for row in conn.execute("PRAGMA table_info(attachments)")}
+    if "template_id" not in attachment_cols:
+        # Ekler artik global degil, ait olduklari sablona baglidir.
+        conn.execute("ALTER TABLE attachments ADD COLUMN template_id INTEGER")
+
+    # Gecis: Ayarlar'daki tek konu/icerik cifti "Genel" sablona tasinir ve o ana
+    # kadar her maile eklenen global ekler bu sablona baglanir. Boylece mevcut
+    # kurulumlar ayni konu, icerik ve eklerle calismaya devam eder.
+    if conn.execute("SELECT 1 FROM mail_templates WHERE is_general = 1").fetchone() is None:
+        legacy = conn.execute("SELECT subject, body FROM settings WHERE id = 1").fetchone()
+        cur = conn.execute(
+            "INSERT INTO mail_templates (name, subject, body, is_general, created_at) "
+            "VALUES (?, ?, ?, 1, ?)",
+            (
+                GENERAL_TEMPLATE_NAME,
+                (legacy["subject"] if legacy else "") or "",
+                (legacy["body"] if legacy else "") or "",
+                datetime.now().isoformat(timespec="seconds"),
+            ),
+        )
+        conn.execute(
+            "UPDATE attachments SET template_id = ? WHERE template_id IS NULL",
+            (cur.lastrowid,),
+        )
     conn.commit()
     conn.close()
 
@@ -117,6 +180,10 @@ def get_settings():
 def save_settings(data):
     """Ayarlari kaydeder. smtp_password veritabaninda sifreli saklanir; formda
     bos birakilmissa (kullanici degistirmek istememis) mevcut sifre korunur.
+
+    Mail konusu ve icerigi burada tutulmaz: artik her sablonun kendi konusu ve
+    icerigi var (bkz. mail_templates). settings.subject/body kolonlari eski
+    kurulumlardan gecis icin duruyor, gonderimde kullanilmiyor.
     """
     password = data["smtp_password"]
     if not password:
@@ -132,8 +199,6 @@ def save_settings(data):
             smtp_password = ?,
             interval_minutes = ?,
             batch_size = ?,
-            subject = ?,
-            body = ?,
             daily_limit = ?
         WHERE id = 1
     """, (
@@ -143,8 +208,6 @@ def save_settings(data):
         crypto.encrypt(password),
         data["interval_minutes"],
         data["batch_size"],
-        data["subject"],
-        data["body"],
         data["daily_limit"],
     ))
     conn.commit()
@@ -417,19 +480,46 @@ def get_pending_contacts(limit):
     return rows
 
 
-def get_sendable_contacts(limit):
-    """Return contacts to send to, retrying failed ones first, then pending.
+# Gonderim sirasi. Once hic mail almamis sirketler, her grupta oncelikli olanlar
+# basta:
+#   1. Oncelikli, henuz mail almamis sirketler
+#   2. Onceliksiz, henuz mail almamis sirketler
+#   3. Oncelikli, daha once mail almis sirketler
+#   4. Onceliksiz, daha once mail almis sirketler
+# Bir sirketin "mail almis" sayilmasi icin kayitlarindan en az birinin durumu
+# 'sent' olmalidir (mevcut gonderim gecmisi bu sekilde tutuluyor). Grup icinde
+# eski davranis korunur: once tekrar denenecek basarisizlar, sonra id sirasi.
+# Secilen KAYIT kumesi degismez (yalnizca status'u failed/pending olanlar
+# gonderilir), sadece sirasi degisir; oncelik yuzunden ayni maile ikinci kez
+# gonderim yapilmaz.
+_SENDABLE_ORDER = """
+    ORDER BY company_sent ASC,
+             c.priority DESC,
+             CASE c.status WHEN 'failed' THEN 0 ELSE 1 END,
+             c.id
+"""
 
-    Failed contacts are ordered before pending ones so that earlier failures
-    are re-attempted before new mails go out. Contacts belonging to a disabled
-    company (enabled = 0) are never returned.
+_COMPANY_SENT_FLAG = """
+    EXISTS(
+        SELECT 1 FROM contacts s
+        WHERE TRIM(COALESCE(s.name, '')) = TRIM(COALESCE(c.name, ''))
+          AND s.status = 'sent'
+    ) AS company_sent
+"""
+
+
+def get_sendable_contacts(limit):
+    """Return contacts to send to, in the priority order described above.
+
+    Contacts belonging to a disabled company (enabled = 0) are never returned.
     """
     conn = get_db_connection()
     rows = conn.execute(
-        """
-        SELECT * FROM contacts
-        WHERE status IN ('failed', 'pending') AND enabled = 1
-        ORDER BY CASE status WHEN 'failed' THEN 0 ELSE 1 END, id
+        f"""
+        SELECT c.*, {_COMPANY_SENT_FLAG}
+        FROM contacts c
+        WHERE c.status IN ('failed', 'pending') AND c.enabled = 1
+        {_SENDABLE_ORDER}
         LIMIT ?
         """,
         (limit,),
@@ -447,6 +537,9 @@ def get_sendable_contacts_by_companies(names):
     (scheduler.send_to_companies) uygulanir. get_companies() bos ismi
     "(Isimsiz)" olarak gosterdigi icin o placeholder burada bos stringe
     cevrilir.
+
+    Siralama get_sendable_contacts ile aynidir: gunluk limit listeyi kirparsa
+    oncelikli ve henuz mail almamis sirketler kesilen kisimda kalmaz.
     """
     if not names:
         return []
@@ -455,10 +548,11 @@ def get_sendable_contacts_by_companies(names):
     placeholders = ",".join("?" for _ in real_names)
     rows = conn.execute(
         f"""
-        SELECT * FROM contacts
-        WHERE status IN ('failed', 'pending') AND enabled = 1
-          AND TRIM(COALESCE(name, '')) IN ({placeholders})
-        ORDER BY CASE status WHEN 'failed' THEN 0 ELSE 1 END, id
+        SELECT c.*, {_COMPANY_SENT_FLAG}
+        FROM contacts c
+        WHERE c.status IN ('failed', 'pending') AND c.enabled = 1
+          AND TRIM(COALESCE(c.name, '')) IN ({placeholders})
+        {_SENDABLE_ORDER}
         """,
         real_names,
     ).fetchall()
@@ -568,11 +662,26 @@ def get_sent_contacts():
 
 
 def get_all_contacts(state: str = None):
+    """Kisiler; etiketin adi da (varsa) `tag_name` olarak gelir.
+
+    tags tablosuna LEFT JOIN yapilir, boylece arayuz her kayit icin ayrica
+    sorgu atmadan etiketi gosterebilir. contacts.name ile karismasin diye
+    etiket adi `tag_name` takma adiyla doner.
+    """
     conn = get_db_connection()
+    query = """
+        SELECT c.*, t.name AS tag_name
+        FROM contacts c
+        LEFT JOIN tags t ON t.id = c.tag_id
+        {where}
+        ORDER BY c.id DESC
+    """
     if state is not None:
-        rows = conn.execute("SELECT * FROM contacts WHERE status = ? ORDER BY id DESC", (state,)).fetchall()
+        rows = conn.execute(
+            query.format(where="WHERE c.status = ?"), (state,)
+        ).fetchall()
     else:
-        rows = conn.execute("SELECT * FROM contacts ORDER BY id DESC").fetchall()
+        rows = conn.execute(query.format(where="")).fetchall()
     conn.close()
     return rows
 
@@ -590,6 +699,9 @@ def get_companies(state: str = None):
     a mixed state only shows up for hand-edited databases. `website` is the
     first non-empty value found among the company's contacts (manuel sirket
     eklemede her kayda ayni web sitesi yazilir).
+
+    `tag_id` / `tag_name` de ayni sekilde ilk dolu degerden alinir: bir sirketin
+    tek etiketi olur, set_company_tag() etiketi sirketin tum kayitlarina yazar.
     """
     contacts = get_all_contacts(state)
     grouped = {}
@@ -609,6 +721,9 @@ def get_companies(state: str = None):
                 "replied": 0,
                 "replied_at": None,
                 "website": None,
+                "tag_id": None,
+                "tag_name": None,
+                "priority": False,
             },
         )
         company["contacts"].append(c)
@@ -624,6 +739,11 @@ def get_companies(state: str = None):
                 company["replied_at"] = c["replied_at"]
         if not company["website"] and c["website"]:
             company["website"] = c["website"]
+        if not company["tag_id"] and c["tag_id"]:
+            company["tag_id"] = c["tag_id"]
+            company["tag_name"] = c["tag_name"]
+        if c["priority"]:
+            company["priority"] = True
     return sorted(grouped.values(), key=lambda x: x["name"].lower())
 
 
@@ -650,18 +770,70 @@ def set_company_enabled(names, enabled: bool):
     return updated
 
 
-def add_attachment(filename, path):
+def set_company_priority(names, priority: bool):
+    """Verilen sirketleri oncelikli yapar ya da onceligini kaldirir.
+
+    `enabled` gibi sirketin TUM kayitlarina yazilir; oncelik gonderim sirasinda
+    get_sendable_contacts tarafindan kullanilir. get_companies() bos ismi
+    "(Isimsiz)" olarak gosterdigi icin o placeholder bos stringe cevrilir.
+
+    Returns: guncellenen kayit sayisi.
+    """
+    if not names:
+        return 0
     conn = get_db_connection()
-    conn.execute(
-        "INSERT INTO attachments (filename, path) VALUES (?, ?)", (filename, path)
-    )
+    updated = 0
+    for name in names:
+        real_name = "" if name == "(Isimsiz)" else name
+        cur = conn.execute(
+            "UPDATE contacts SET priority = ? WHERE TRIM(COALESCE(name, '')) = ?",
+            (1 if priority else 0, real_name),
+        )
+        updated += cur.rowcount
+    conn.commit()
+    conn.close()
+    return updated
+
+
+def add_attachment(filename, path, template_id):
+    """Bir eki verilen sablona baglar.
+
+    Ayni sablona ayni dosya adi tekrar yuklenirse yeni bir kayit acilmaz, var
+    olan kayit guncellenir: dosya diskte zaten uzerine yazildigi icin ikinci bir
+    satir maile ayni eki iki kez ekletirdi.
+    """
+    conn = get_db_connection()
+    existing = conn.execute(
+        "SELECT id FROM attachments WHERE template_id = ? AND filename = ?",
+        (template_id, filename),
+    ).fetchone()
+    if existing:
+        conn.execute(
+            "UPDATE attachments SET path = ? WHERE id = ?", (path, existing["id"])
+        )
+    else:
+        conn.execute(
+            "INSERT INTO attachments (filename, path, template_id) VALUES (?, ?, ?)",
+            (filename, path, template_id),
+        )
     conn.commit()
     conn.close()
 
 
-def get_attachments():
+def get_attachments(template_id=None):
+    """Ekler. `template_id` verilirse yalnizca o sablonun ekleri doner.
+
+    Gonderimde her zaman sablon id'siyle cagrilir; bir sablonun ekleri baska bir
+    sablonun mailine hicbir kosulda karisamaz.
+    """
     conn = get_db_connection()
-    rows = conn.execute("SELECT * FROM attachments ORDER BY id").fetchall()
+    if template_id is None:
+        rows = conn.execute("SELECT * FROM attachments ORDER BY id").fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM attachments WHERE template_id = ? ORDER BY id",
+            (template_id,),
+        ).fetchall()
     conn.close()
     return rows
 
@@ -680,6 +852,303 @@ def delete_attachment(attachment_id):
     conn.execute("DELETE FROM attachments WHERE id = ?", (attachment_id,))
     conn.commit()
     conn.close()
+
+
+# --- Mail sablonlari --------------------------------------------------------
+
+def get_mail_templates():
+    """Sablonlar: genel sablon her zaman basta, digerleri ada gore siralanir."""
+    conn = get_db_connection()
+    rows = conn.execute(
+        "SELECT * FROM mail_templates ORDER BY is_general DESC, name COLLATE NOCASE"
+    ).fetchall()
+    conn.close()
+    return rows
+
+
+def get_mail_template(template_id):
+    conn = get_db_connection()
+    row = conn.execute(
+        "SELECT * FROM mail_templates WHERE id = ?", (template_id,)
+    ).fetchone()
+    conn.close()
+    return row
+
+
+def get_general_template():
+    """Etiketi olmayan sirketlere gonderilen varsayilan sablon."""
+    conn = get_db_connection()
+    row = conn.execute(
+        "SELECT * FROM mail_templates WHERE is_general = 1"
+    ).fetchone()
+    conn.close()
+    return row
+
+
+def get_templates_with_attachments():
+    """Mail sayfasi icin sablonlar + her birinin ekleri (iki sorgu).
+
+    Ekler sablon id'sine gore gruplanir; sablon basina ayri sorgu atilmaz.
+    """
+    templates = [dict(row) for row in get_mail_templates()]
+    grouped = {}
+    for attachment in get_attachments():
+        grouped.setdefault(attachment["template_id"], []).append(attachment)
+    for template in templates:
+        template["attachments"] = grouped.get(template["id"], [])
+    return templates
+
+
+def add_mail_template(name, subject, body):
+    """Yeni bir sablon ekler. Returns: (template_id, hata_mesaji)."""
+    name = (name or "").strip()
+    if not name:
+        return None, "Sablon adi bos birakilamaz."
+    conn = get_db_connection()
+    try:
+        cur = conn.execute(
+            "INSERT INTO mail_templates (name, subject, body, is_general, created_at) "
+            "VALUES (?, ?, ?, 0, ?)",
+            (name, subject or "", body or "", datetime.now().isoformat(timespec="seconds")),
+        )
+        conn.commit()
+        template_id = cur.lastrowid
+        error = None
+    except sqlite3.IntegrityError:
+        template_id, error = None, f"'{name}' adinda bir sablon zaten var."
+    conn.close()
+    return template_id, error
+
+
+def update_mail_template(template_id, name, subject, body):
+    """Sablonun adini/konusunu/icerigini gunceller. Returns: hata_mesaji ya da None.
+
+    is_general degistirilemez: genel sablonun hangisi oldugu ancak init_db ile
+    belirlenir, boylece etiketsiz sirketler her zaman bir sablona sahip olur.
+    """
+    name = (name or "").strip()
+    if not name:
+        return "Sablon adi bos birakilamaz."
+    conn = get_db_connection()
+    try:
+        cur = conn.execute(
+            "UPDATE mail_templates SET name = ?, subject = ?, body = ? WHERE id = ?",
+            (name, subject or "", body or "", template_id),
+        )
+        conn.commit()
+        error = None if cur.rowcount else "Sablon bulunamadi."
+    except sqlite3.IntegrityError:
+        error = f"'{name}' adinda bir sablon zaten var."
+    conn.close()
+    return error
+
+
+def delete_mail_template(template_id):
+    """Sablonu ve ek kayitlarini siler. Returns: hata_mesaji ya da None.
+
+    Genel sablon silinemez (etiketsiz sirketler sablonsuz kalirdi) ve bir
+    etikete bagli sablon da silinemez: etiketin sablonu zorunludur, silmek
+    etiketi gecersiz birakirdi. Diskteki dosyalar cagiran tarafta silinir
+    (bkz. app.delete_mail_template_route).
+    """
+    conn = get_db_connection()
+    template = conn.execute(
+        "SELECT * FROM mail_templates WHERE id = ?", (template_id,)
+    ).fetchone()
+    if template is None:
+        conn.close()
+        return "Sablon bulunamadi."
+    if template["is_general"]:
+        conn.close()
+        return "Genel sablon silinemez; etiketi olmayan sirketler bu sablonu kullanir."
+
+    used_by = [
+        row["name"]
+        for row in conn.execute(
+            "SELECT name FROM tags WHERE template_id = ? ORDER BY name", (template_id,)
+        )
+    ]
+    if used_by:
+        conn.close()
+        return (
+            "Bu sablon su etiketlere bagli oldugu icin silinemez: "
+            + ", ".join(used_by)
+            + ". Once etiketlere baska bir sablon atayin."
+        )
+
+    conn.execute("DELETE FROM attachments WHERE template_id = ?", (template_id,))
+    conn.execute("DELETE FROM mail_templates WHERE id = ?", (template_id,))
+    conn.commit()
+    conn.close()
+    return None
+
+
+def get_template_lookup():
+    """Gonderimde kullanilan sablon haritasi: {tag_id: sablon}, None -> genel.
+
+    Tek noktadan kurulur ki sablon secimi (etiketi olan sirket kendi sablonunu,
+    olmayan genel sablonu alir) her gonderim yolunda ayni olsun. Tum harita iki
+    sorguyla hazirlanir; gonderim dongusu kisi basina veritabanina gitmez.
+    """
+    conn = get_db_connection()
+    templates = {
+        row["id"]: dict(row) for row in conn.execute("SELECT * FROM mail_templates")
+    }
+    lookup = {None: next((t for t in templates.values() if t["is_general"]), None)}
+    for row in conn.execute("SELECT id, template_id FROM tags"):
+        # Sablonu bulunamayan etiket (elle duzenlenmis veritabani) genel
+        # sablona duser; cagiran taraf `or general` ile bunu karsilar.
+        lookup[row["id"]] = templates.get(row["template_id"])
+    conn.close()
+    return lookup
+
+
+# --- Etiketler --------------------------------------------------------------
+
+def get_tags():
+    """Etiketler; bagli sablonun adi ve etiketi tasiyan sirket sayisiyla."""
+    conn = get_db_connection()
+    rows = conn.execute(
+        """
+        SELECT t.*, m.name AS template_name
+        FROM tags t
+        LEFT JOIN mail_templates m ON m.id = t.template_id
+        ORDER BY t.name COLLATE NOCASE
+        """
+    ).fetchall()
+    counts = {
+        row["tag_id"]: row["company_count"]
+        for row in conn.execute(
+            """
+            SELECT tag_id, COUNT(DISTINCT TRIM(COALESCE(name, ''))) AS company_count
+            FROM contacts WHERE tag_id IS NOT NULL GROUP BY tag_id
+            """
+        )
+    }
+    conn.close()
+    tags = []
+    for row in rows:
+        tag = dict(row)
+        tag["company_count"] = counts.get(tag["id"], 0)
+        tags.append(tag)
+    return tags
+
+
+def get_tag(tag_id):
+    conn = get_db_connection()
+    row = conn.execute("SELECT * FROM tags WHERE id = ?", (tag_id,)).fetchone()
+    conn.close()
+    return row
+
+
+def _template_exists(conn, template_id):
+    if not template_id:
+        return False
+    return conn.execute(
+        "SELECT 1 FROM mail_templates WHERE id = ?", (template_id,)
+    ).fetchone() is not None
+
+
+def add_tag(name, template_id):
+    """Yeni etiket ekler. Returns: (tag_id, hata_mesaji).
+
+    Sablon zorunludur: sablonsuz bir etiket, o etiketi tasiyan sirkete hangi
+    mailin gidecegini belirsiz birakirdi.
+    """
+    name = (name or "").strip()
+    if not name:
+        return None, "Etiket adi bos birakilamaz."
+    conn = get_db_connection()
+    if not _template_exists(conn, template_id):
+        conn.close()
+        return None, "Etiket olusturmak icin gecerli bir mail sablonu secilmeli."
+    try:
+        cur = conn.execute(
+            "INSERT INTO tags (name, template_id, created_at) VALUES (?, ?, ?)",
+            (name, template_id, datetime.now().isoformat(timespec="seconds")),
+        )
+        conn.commit()
+        tag_id, error = cur.lastrowid, None
+    except sqlite3.IntegrityError:
+        tag_id, error = None, f"'{name}' adinda bir etiket zaten var."
+    conn.close()
+    return tag_id, error
+
+
+def update_tag(tag_id, name, template_id):
+    """Etiketin adini ve/veya bagli sablonunu gunceller.
+
+    Sablon burada da zorunludur; degistirilirse bundan sonraki gonderimlerde
+    yeni sablon kullanilir (secim gonderim aninda yapilir, bkz.
+    get_template_lookup).
+
+    Returns: hata_mesaji ya da None.
+    """
+    name = (name or "").strip()
+    if not name:
+        return "Etiket adi bos birakilamaz."
+    conn = get_db_connection()
+    if not _template_exists(conn, template_id):
+        conn.close()
+        return "Etiketin bir mail sablonu olmak zorunda."
+    try:
+        cur = conn.execute(
+            "UPDATE tags SET name = ?, template_id = ? WHERE id = ?",
+            (name, template_id, tag_id),
+        )
+        conn.commit()
+        error = None if cur.rowcount else "Etiket bulunamadi."
+    except sqlite3.IntegrityError:
+        error = f"'{name}' adinda bir etiket zaten var."
+    conn.close()
+    return error
+
+
+def delete_tag(tag_id):
+    """Etiketi siler; etiketi tasiyan sirketler etiketsiz kalir.
+
+    Etiketsiz kalan sirketler bundan sonra genel sablonu alir. Returns:
+    etiketi kaldirilan kayit sayisi.
+    """
+    conn = get_db_connection()
+    cleared = conn.execute(
+        "UPDATE contacts SET tag_id = NULL WHERE tag_id = ?", (tag_id,)
+    ).rowcount
+    conn.execute("DELETE FROM tags WHERE id = ?", (tag_id,))
+    conn.commit()
+    conn.close()
+    return cleared
+
+
+def set_company_tag(names, tag_id):
+    """Verilen sirketlerin etiketini ayarlar (tag_id None ise etiketi kaldirir).
+
+    Bir sirketin tek etiketi olur: etiket, sirketin TUM kayitlarina yazilir ve
+    onceki deger eklenmez, degistirilir. get_companies() bos ismi "(Isimsiz)"
+    olarak gosterdigi icin o placeholder burada bos stringe cevrilir.
+
+    Returns: guncellenen kayit sayisi.
+    """
+    if not names:
+        return 0
+    conn = get_db_connection()
+    if tag_id is not None:
+        if conn.execute("SELECT 1 FROM tags WHERE id = ?", (tag_id,)).fetchone() is None:
+            # Var olmayan bir etiketi sessizce yazmak yerine cagiran tarafa
+            # hata birakilir; aksi halde sirket "bilinmeyen etiket" ile kalirdi.
+            conn.close()
+            raise ValueError("Etiket bulunamadi.")
+    updated = 0
+    for name in names:
+        real_name = "" if name == "(Isimsiz)" else name
+        cur = conn.execute(
+            "UPDATE contacts SET tag_id = ? WHERE TRIM(COALESCE(name, '')) = ?",
+            (tag_id, real_name),
+        )
+        updated += cur.rowcount
+    conn.commit()
+    conn.close()
+    return updated
 
 
 def get_stats(only_enabled: bool = False):

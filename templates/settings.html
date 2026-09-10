@@ -49,38 +49,12 @@
         </div>
     </div>
 
-    <div class="mb-3">
-        <label class="form-label">Mail Konusu</label>
-        <input type="text" class="form-control" name="subject" value="{{ settings.subject or '' }}" required>
+    <div class="alert alert-secondary py-2 small">
+        Mail konusu, icerigi ve ekleri artik
+        <a href="{{ url_for('mail_page') }}">Mail sayfasindaki sablonlarda</a> yonetiliyor.
+        Her sablonun kendi konusu, icerigi ve ekleri var; hangi sirkete hangi sablonun
+        gidecegi de sirketin etiketine gore orada belirleniyor.
     </div>
-
-    <div class="mb-3">
-        <label class="form-label">Mail Icerigi</label>
-        <textarea class="form-control" name="body" rows="6" required>{{ settings.body or '' }}</textarea>
-    </div>
-
-    <div class="mb-3">
-        <label class="form-label">Ekler (Attachment)</label>
-        <input type="file" class="form-control" name="attachments" multiple>
-        <div class="form-text">Secilen dosyalar her gonderilen maile eklenir. Birden fazla secebilirsiniz.</div>
-    </div>
-
-    {% if attachments %}
-    <div class="mb-3">
-        <label class="form-label">Mevcut Ekler</label>
-        <ul class="list-group">
-            {% for a in attachments %}
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-                <span>📎 {{ a.filename }}</span>
-                <button type="submit" class="btn btn-outline-danger btn-sm"
-                        formaction="{{ url_for('delete_attachment', attachment_id=a.id) }}"
-                        formnovalidate
-                        onclick="return confirm('Bu ek silinsin mi?');">Sil</button>
-            </li>
-            {% endfor %}
-        </ul>
-    </div>
-    {% endif %}
 
     <div class="d-flex align-items-center gap-2">
         <button type="submit" class="btn btn-primary">Kaydet</button>
