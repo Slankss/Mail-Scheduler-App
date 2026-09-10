@@ -314,6 +314,8 @@ def progress():
 @app.route("/settings", methods=["GET", "POST"])
 def settings_page():
     if request.method == "POST":
+        # Mail konusu/icerigi ve ekler burada degil, Mail sayfasindaki
+        # sablonlarda yonetilir (bkz. mail_page).
         data = {
             "smtp_server": request.form["smtp_server"].strip(),
             "smtp_port": int(request.form["smtp_port"]),
@@ -321,18 +323,9 @@ def settings_page():
             "smtp_password": request.form["smtp_password"],
             "interval_minutes": int(request.form["interval_minutes"]),
             "batch_size": int(request.form["batch_size"]),
-            "subject": request.form["subject"],
-            "body": request.form["body"],
             "daily_limit": int(request.form.get("daily_limit") or 0),
         }
         database.save_settings(data)
-
-        for upload in request.files.getlist("attachments"):
-            if upload and upload.filename:
-                filename = secure_filename(upload.filename)
-                filepath = UPLOAD_DIR / filename
-                upload.save(filepath)
-                database.add_attachment(filename, str(filepath))
 
         if sched.is_running():
             sched.start()  # reschedule with new interval
@@ -341,11 +334,8 @@ def settings_page():
         return redirect(url_for("settings_page"))
 
     settings = database.get_settings()
-    attachments = database.get_attachments()
     variants = database.get_mail_variant_rows()
-    return render_template(
-        "settings.html", settings=settings, attachments=attachments, variants=variants
-    )
+    return render_template("settings.html", settings=settings, variants=variants)
 
 
 @app.route("/settings/test", methods=["POST"])
@@ -435,13 +425,167 @@ def delete_variant(variant_id):
 def delete_attachment(attachment_id):
     attachment = database.get_attachment(attachment_id)
     if attachment:
-        try:
-            os.remove(attachment["path"])
-        except OSError:
-            pass
+        _remove_attachment_file(attachment["path"])
         database.delete_attachment(attachment_id)
         flash("Ek silindi.", "warning")
-    return redirect(url_for("settings_page"))
+    return redirect(url_for("mail_page"))
+
+
+# --- Mail sayfasi: sablonlar, ekler ve etiketler ----------------------------
+
+def template_upload_dir(template_id):
+    """Bir sablonun eklerinin durdugu klasor.
+
+    Her sablon kendi klasorunde tutulur: ayni dosya adi (ornegin
+    "firma-brosur.pdf") iki sablona da yuklenebilsin ve biri silindiginde
+    digerinin dosyasi kaybolmasin diye. Dosya adi oldugu gibi korunur, cunku
+    alicinin gordugu ek adi diskteki ad ile ayni (bkz. mailer.send_email).
+    """
+    return UPLOAD_DIR / "templates" / str(template_id)
+
+
+def _remove_attachment_file(path):
+    try:
+        os.remove(path)
+    except OSError:
+        # Dosya elle silinmis ya da hic yazilamamis olabilir; kaydi silmeye
+        # devam etmek dogru davranis.
+        pass
+
+
+def save_template_attachments(template_id, uploads):
+    """Yuklenen dosyalari sablonun klasorune yazip veritabanina baglar.
+
+    Returns: eklenen dosya sayisi.
+    """
+    saved = 0
+    target_dir = template_upload_dir(template_id)
+    for upload in uploads:
+        if not upload or not upload.filename:
+            continue
+        filename = secure_filename(upload.filename)
+        if not filename:
+            continue
+        target_dir.mkdir(parents=True, exist_ok=True)
+        filepath = target_dir / filename
+        upload.save(filepath)
+        database.add_attachment(filename, str(filepath), template_id)
+        saved += 1
+    return saved
+
+
+@app.route("/mail")
+def mail_page():
+    """Mail sayfasi: sablonlar, ekleri ve etiket-sablon eslesmeleri.
+
+    Mail icerigiyle ilgili her sey burada toplanir; Ayarlar sayfasi yalnizca
+    SMTP baglantisi ve gonderim ritmi gibi teknik ayarlari tutar.
+    """
+    return render_template(
+        "mail.html",
+        templates=database.get_templates_with_attachments(),
+        tags=database.get_tags(),
+        general_template=database.get_general_template(),
+    )
+
+
+@app.route("/mail/templates", methods=["POST"])
+def add_mail_template():
+    template_id, error = database.add_mail_template(
+        request.form.get("name"),
+        request.form.get("subject"),
+        request.form.get("body"),
+    )
+    if error:
+        flash(error, "danger")
+        return redirect(url_for("mail_page"))
+
+    saved = save_template_attachments(
+        template_id, request.files.getlist("attachments")
+    )
+    msg = f"'{request.form.get('name', '').strip()}' sablonu olusturuldu."
+    if saved:
+        msg += f" {saved} ek yuklendi."
+    flash(msg, "success")
+    return redirect(url_for("mail_page"))
+
+
+@app.route("/mail/templates/<int:template_id>/update", methods=["POST"])
+def update_mail_template(template_id):
+    error = database.update_mail_template(
+        template_id,
+        request.form.get("name"),
+        request.form.get("subject"),
+        request.form.get("body"),
+    )
+    if error:
+        flash(error, "danger")
+        return redirect(url_for("mail_page"))
+
+    saved = save_template_attachments(
+        template_id, request.files.getlist("attachments")
+    )
+    msg = "Sablon guncellendi."
+    if saved:
+        msg += f" {saved} ek yuklendi."
+    flash(msg, "success")
+    return redirect(url_for("mail_page"))
+
+
+@app.route("/mail/templates/<int:template_id>/delete", methods=["POST"])
+def delete_mail_template(template_id):
+    # Dosyalar veritabani kayitlarindan once okunur; silme basarisiz olursa
+    # (genel sablon ya da bir etikete bagli sablon) dosyalara dokunulmaz.
+    attachments = database.get_attachments(template_id)
+    error = database.delete_mail_template(template_id)
+    if error:
+        flash(error, "danger")
+        return redirect(url_for("mail_page"))
+
+    for attachment in attachments:
+        _remove_attachment_file(attachment["path"])
+    try:
+        template_upload_dir(template_id).rmdir()
+    except OSError:
+        pass
+    flash("Sablon silindi.", "warning")
+    return redirect(url_for("mail_page"))
+
+
+@app.route("/mail/tags", methods=["POST"])
+def add_tag():
+    """Yeni etiket. Sablon secimi zorunlu (bkz. database.add_tag)."""
+    _, error = database.add_tag(
+        request.form.get("name"), request.form.get("template_id", type=int)
+    )
+    if error:
+        flash(error, "danger")
+    else:
+        flash(f"'{request.form.get('name', '').strip()}' etiketi olusturuldu.", "success")
+    return redirect(url_for("mail_page"))
+
+
+@app.route("/mail/tags/<int:tag_id>/update", methods=["POST"])
+def update_tag(tag_id):
+    error = database.update_tag(
+        tag_id, request.form.get("name"), request.form.get("template_id", type=int)
+    )
+    if error:
+        flash(error, "danger")
+    else:
+        flash("Etiket guncellendi; bundan sonraki gonderimler yeni sablonu kullanir.",
+              "success")
+    return redirect(url_for("mail_page"))
+
+
+@app.route("/mail/tags/<int:tag_id>/delete", methods=["POST"])
+def delete_tag(tag_id):
+    cleared = database.delete_tag(tag_id)
+    msg = "Etiket silindi."
+    if cleared:
+        msg += f" Etiketi tasiyan {cleared} kayit artik genel sablonu kullanacak."
+    flash(msg, "warning")
+    return redirect(url_for("mail_page"))
 
 
 @app.route("/settings/export", methods=["GET"])
@@ -1025,7 +1169,58 @@ def contacts_page():
         total_companies=total_companies,
         total_mails=total_mails,
         variants=database.get_mail_variants(),
+        tags=database.get_tags(),
     )
+
+
+@app.route("/contacts/set-tag", methods=["POST"])
+def set_company_tag():
+    """Secili sirketlere etiket atar ya da etiketi kaldirir.
+
+    Bir sirketin tek etiketi olur: gonderilen etiket, sirketin tum kayitlarina
+    yazilir ve onceki etiketin yerini alir (bkz. database.set_company_tag).
+    `tag_id` bos/None gonderilirse etiket kaldirilir ve sirket genel sablona
+    doner. Kural burada, sunucu tarafinda uygulanir; arayuzdeki tekli secim
+    yalnizca ayni kurali gorunur kilar.
+    """
+    data = request.get_json(silent=True) or {}
+    names = data.get("names", [])
+    if not names:
+        return jsonify({"ok": False, "error": "Sirket secilmedi."}), 400
+
+    tag_id = data.get("tag_id")
+    tag_id = int(tag_id) if tag_id not in (None, "", "none") else None
+
+    try:
+        updated = database.set_company_tag(names, tag_id)
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+    tag = database.get_tag(tag_id) if tag_id else None
+    return jsonify({
+        "ok": True,
+        "updated": updated,
+        "tag_id": tag_id,
+        "tag_name": tag["name"] if tag else None,
+    })
+
+
+@app.route("/contacts/set-priority", methods=["POST"])
+def set_company_priority():
+    """Secili sirketleri oncelikli yapar / onceligini kaldirir.
+
+    Oncelik sirketin kayitlarinda saklanir ve gonderim sirasini veritabani
+    sorgusu belirler (bkz. database.get_sendable_contacts); arayuzdeki siralama
+    yalnizca bu durumu gosterir.
+    """
+    data = request.get_json(silent=True) or {}
+    names = data.get("names", [])
+    if not names:
+        return jsonify({"ok": False, "error": "Sirket secilmedi."}), 400
+
+    priority = bool(data.get("priority"))
+    updated = database.set_company_priority(names, priority)
+    return jsonify({"ok": True, "updated": updated, "priority": priority})
 
 
 @app.route("/contacts/send-selected", methods=["POST"])

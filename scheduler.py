@@ -36,6 +36,55 @@ def _limit_reason(settings):
     )
 
 
+def deliver(contacts, settings):
+    """Verilen kisilere mail gonderir ve (gonderilen, basarisiz) dondurur.
+
+    Sablon secimi burada, tek noktada yapilir: bir kisinin sirketi etiketliyse o
+    etiketin sablonu, degilse genel sablon kullanilir. Gonderim nereden
+    tetiklenirse tetiklensin (periyodik tur, "Simdi Gonder", Sirketler
+    sayfasindaki toplu gonderim) ayni kural isler - secim mantigi cagiran
+    taraflara kopyalanmaz.
+
+    Konu, icerik ve ekler tamamen secilen sablondan gelir; ekler sablon id'siyle
+    sorgulandigi icin bir sablonun ekleri baska bir sablonun mailine karisamaz.
+    """
+    lookup = database.get_template_lookup()
+    general = lookup.get(None)
+    # Ayni sablon birden fazla kisiye gidiyor; ek listesi sablon basina bir kez
+    # okunur.
+    attachments_by_template = {}
+
+    sent = failed = 0
+    for contact in contacts:
+        template = lookup.get(contact["tag_id"]) or general
+        if template is None:
+            # Genel sablon yok (init_db normalde olusturur): gonderecek bir
+            # icerik olmadigi icin kayit basarisiz isaretlenir.
+            database.mark_contact_failed(contact["id"])
+            failed += 1
+            continue
+
+        paths = attachments_by_template.get(template["id"])
+        if paths is None:
+            paths = [a["path"] for a in database.get_attachments(template["id"])]
+            attachments_by_template[template["id"]] = paths
+
+        try:
+            send_email(
+                settings,
+                contact["email"],
+                template["subject"],
+                template["body"],
+                attachments=paths,
+            )
+            database.mark_contact_sent(contact["id"])
+            sent += 1
+        except Exception:
+            database.mark_contact_failed(contact["id"])
+            failed += 1
+    return sent, failed
+
+
 def send_batch():
     settings = database.get_settings()
     if not settings or not settings["smtp_email"]:
@@ -55,22 +104,8 @@ def send_batch():
             return
         batch_size = min(batch_size, remaining)
 
-    attachments = [a["path"] for a in database.get_attachments()]
-
     # Retry failed contacts first, then send to pending ones.
-    contacts = database.get_sendable_contacts(batch_size)
-    for contact in contacts:
-        try:
-            send_email(
-                settings,
-                contact["email"],
-                settings["subject"],
-                settings["body"],
-                attachments=attachments,
-            )
-            database.mark_contact_sent(contact["id"])
-        except Exception:
-            database.mark_contact_failed(contact["id"])
+    deliver(database.get_sendable_contacts(batch_size), settings)
 
     # Bu paketle limit dolduysa bir sonraki turu beklemeden hemen duruyoruz;
     # boylece arayuz de gonderimi "durduruldu" olarak gosterir.
@@ -109,23 +144,7 @@ def send_to_companies(names):
             skipped_limit = len(contacts) - remaining
             contacts = contacts[:remaining]
 
-    attachments = [a["path"] for a in database.get_attachments()]
-    sent = failed = 0
-    for contact in contacts:
-        try:
-            send_email(
-                settings,
-                contact["email"],
-                settings["subject"],
-                settings["body"],
-                attachments=attachments,
-            )
-            database.mark_contact_sent(contact["id"])
-            sent += 1
-        except Exception:
-            database.mark_contact_failed(contact["id"])
-            failed += 1
-
+    sent, failed = deliver(contacts, settings)
     return {"sent": sent, "failed": failed, "skipped_limit": skipped_limit, "error": None}
 
 

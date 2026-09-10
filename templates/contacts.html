@@ -29,6 +29,30 @@
                 </button>
             </li>
             <li>
+                <div class="dropdown-item d-flex align-items-center gap-2">
+                    <select class="form-select form-select-sm" id="bulkTagSelect" style="max-width: 10rem;"
+                            aria-label="Secili sirketlere atanacak etiket">
+                        <option value="">Etiketsiz (genel)</option>
+                        {% for tag in tags %}
+                        <option value="{{ tag.id }}">{{ tag.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" id="bulkTagBtn" class="btn btn-sm btn-outline-primary" disabled>
+                        Etiket ata
+                    </button>
+                </div>
+            </li>
+            <li>
+                <button type="button" id="prioritySelectedBtn" class="dropdown-item" disabled>
+                    &#9733; Oncelikli yap <span class="text-muted small">&mdash; gonderimde one alinir</span>
+                </button>
+            </li>
+            <li>
+                <button type="button" id="unprioritySelectedBtn" class="dropdown-item" disabled>
+                    Onceligi kaldir
+                </button>
+            </li>
+            <li>
                 <button type="button" id="enableSelectedBtn" class="dropdown-item" disabled>
                     Aktif et <span class="text-muted small">&mdash; tekrar mail gonderilir</span>
                 </button>
@@ -133,6 +157,10 @@
             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                     data-bs-target="#company-{{ loop.index }}" style="width: auto; flex: 1 1 auto;">
                 <span class="me-3 fw-bold">{{ company.name }}</span>
+                <span class="badge bg-warning text-dark me-1 priority-badge {% if not company.priority %}d-none{% endif %}"
+                      title="Gonderimde one alinir">&#9733; Oncelikli</span>
+                <span class="badge bg-primary me-1 tag-badge {% if not company.tag_name %}d-none{% endif %}"
+                      title="Bu sirkete etiketin sablonu gonderilir">{{ company.tag_name or '' }}</span>
                 <span class="badge bg-dark me-1 disabled-badge {% if company.enabled %}d-none{% endif %}">Pasif</span>
                 {% if company.replied %}
                 <span class="badge bg-info text-dark me-1"
@@ -143,8 +171,22 @@
                 {% if company.pending %}<span class="badge bg-warning text-dark me-1">{{ company.pending }} beklemede</span>{% endif %}
                 {% if company.failed %}<span class="badge bg-danger me-1">{{ company.failed }} basarisiz</span>{% endif %}
             </button>
-            <div class="d-flex align-items-center gap-3 pe-3 bg-body">
-                <div class="form-check form-switch mb-0" title="Kapaliyken bu sirkete mail gonderilmez">
+            <div class="d-flex align-items-center gap-2 pe-3 bg-body">
+                <button type="button"
+                        class="btn btn-sm priority-btn {% if company.priority %}btn-warning{% else %}btn-outline-secondary{% endif %}"
+                        data-company="{{ company.name }}"
+                        data-priority="{{ 1 if company.priority else 0 }}"
+                        title="Oncelikli sirketler gonderimde one alinir">&#9733;</button>
+                <select class="form-select form-select-sm company-tag" style="width: 9.5rem;"
+                        data-company="{{ company.name }}"
+                        aria-label="{{ company.name }} sirketinin etiketi"
+                        title="Sirketin tek etiketi olur; secim onceki etiketin yerini alir">
+                    <option value="" {% if not company.tag_id %}selected{% endif %}>Etiketsiz (genel)</option>
+                    {% for tag in tags %}
+                    <option value="{{ tag.id }}" {% if company.tag_id == tag.id %}selected{% endif %}>{{ tag.name }}</option>
+                    {% endfor %}
+                </select>
+                <div class="form-check form-switch mb-0 ms-1" title="Kapaliyken bu sirkete mail gonderilmez">
                     <input class="form-check-input company-toggle" type="checkbox" role="switch"
                            data-company="{{ company.name }}"
                            {% if company.enabled %}checked{% endif %}
@@ -308,6 +350,10 @@ document.addEventListener("DOMContentLoaded", function () {
     const enableSelectedBtn = document.getElementById("enableSelectedBtn");
     const disableSelectedBtn = document.getElementById("disableSelectedBtn");
     const sendSelectedBtn = document.getElementById("sendSelectedBtn");
+    const bulkTagBtn = document.getElementById("bulkTagBtn");
+    const bulkTagSelect = document.getElementById("bulkTagSelect");
+    const prioritySelectedBtn = document.getElementById("prioritySelectedBtn");
+    const unprioritySelectedBtn = document.getElementById("unprioritySelectedBtn");
     const selectedCountSpan = document.getElementById("selectedCount");
     const selectAllCheckbox = document.getElementById("selectAllCompanies");
 
@@ -323,6 +369,9 @@ document.addEventListener("DOMContentLoaded", function () {
         enableSelectedBtn.disabled = count === 0;
         disableSelectedBtn.disabled = count === 0;
         sendSelectedBtn.disabled = count === 0;
+        bulkTagBtn.disabled = count === 0;
+        prioritySelectedBtn.disabled = count === 0;
+        unprioritySelectedBtn.disabled = count === 0;
     }
 
     document.querySelectorAll(".company-checkbox").forEach(function (cb) {
@@ -378,6 +427,112 @@ document.addEventListener("DOMContentLoaded", function () {
                 alert("Durum degistirilemedi: " + e);
             } finally {
                 toggle.disabled = false;
+            }
+        });
+    });
+
+    // --- Etiket: sirketin tek etiketi olur, secim oncekinin yerini alir ---
+    async function setCompanyTag(names, tagId) {
+        const resp = await fetch("{{ url_for('set_company_tag') }}", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ names: names, tag_id: tagId || null }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) throw new Error(data.error || ("HTTP " + resp.status));
+        return data;
+    }
+
+    function paintTag(item, tagName) {
+        const badge = item.querySelector(".tag-badge");
+        if (!badge) return;
+        badge.textContent = tagName || "";
+        badge.classList.toggle("d-none", !tagName);
+    }
+
+    document.querySelectorAll(".company-tag").forEach(function (select) {
+        let previous = select.value;
+        select.addEventListener("change", async function () {
+            const item = select.closest(".accordion-item");
+            select.disabled = true;
+            try {
+                const data = await setCompanyTag([select.dataset.company], select.value);
+                paintTag(item, data.tag_name);
+                previous = select.value;
+            } catch (e) {
+                select.value = previous;  // sunucu yazamadi, secimi geri al
+                alert("Etiket atanamadi: " + e.message);
+            } finally {
+                select.disabled = false;
+            }
+        });
+    });
+
+    bulkTagBtn.addEventListener("click", async function () {
+        const selected = selectedNames();
+        if (selected.length === 0) return;
+        const label = bulkTagSelect.options[bulkTagSelect.selectedIndex].textContent.trim();
+        if (!confirm(selected.length + " sirketin etiketi \"" + label + "\" olarak degistirilecek. Onayliyor musunuz?")) return;
+        bulkTagBtn.disabled = true;
+        try {
+            await setCompanyTag(selected, bulkTagSelect.value);
+            window.location.reload();
+        } catch (e) {
+            alert("Etiket atanamadi: " + e.message);
+            bulkTagBtn.disabled = false;
+        }
+    });
+
+    // --- Oncelik ---
+    async function setCompanyPriority(names, priority) {
+        const resp = await fetch("{{ url_for('set_company_priority') }}", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ names: names, priority: priority }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) throw new Error(data.error || ("HTTP " + resp.status));
+        return data;
+    }
+
+    function paintPriority(item, button, priority) {
+        button.dataset.priority = priority ? "1" : "0";
+        button.classList.toggle("btn-warning", priority);
+        button.classList.toggle("btn-outline-secondary", !priority);
+        const badge = item.querySelector(".priority-badge");
+        if (badge) badge.classList.toggle("d-none", !priority);
+    }
+
+    document.querySelectorAll(".priority-btn").forEach(function (button) {
+        button.addEventListener("click", async function () {
+            const item = button.closest(".accordion-item");
+            const next = button.dataset.priority !== "1";
+            button.disabled = true;
+            try {
+                await setCompanyPriority([button.dataset.company], next);
+                paintPriority(item, button, next);
+            } catch (e) {
+                alert("Oncelik degistirilemedi: " + e.message);
+            } finally {
+                button.disabled = false;
+            }
+        });
+    });
+
+    [[prioritySelectedBtn, true], [unprioritySelectedBtn, false]].forEach(function (pair) {
+        const [button, priority] = pair;
+        button.addEventListener("click", async function () {
+            const selected = selectedNames();
+            if (selected.length === 0) return;
+            const label = priority ? "oncelikli yapilacak" : "onceligi kaldirilacak";
+            if (!confirm(selected.length + " sirket " + label + ". Onayliyor musunuz?")) return;
+            button.disabled = true;
+            try {
+                await setCompanyPriority(selected, priority);
+                window.location.reload();
+            } catch (e) {
+                alert("Oncelik degistirilemedi: " + e.message);
+                button.disabled = false;
             }
         });
     });
